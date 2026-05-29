@@ -13,6 +13,7 @@ export default function App() {
   const [blobCount, setBlobCount] = useState(3);
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
+  const [hardness, setHardness] = useState(0);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export default function App() {
     composition,
     grain,
     blur,
-    hardness: 0,
+    hardness,
     irregularity: 0,
   };
 
@@ -58,12 +59,14 @@ export default function App() {
         blobCount={blobCount}
         grain={grain}
         blur={blur}
+        hardness={hardness}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
         onBlobCountChange={setBlobCount}
         onGrainChange={setGrain}
         onBlurChange={setBlur}
+        onHardnessChange={setHardness}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

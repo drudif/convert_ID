@@ -17,12 +17,14 @@ type Props = {
   blobCount: number;
   grain: number;
   blur: number;
+  hardness: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
   onBlobCountChange: (n: number) => void;
   onGrainChange: (g: number) => void;
   onBlurChange: (b: number) => void;
+  onHardnessChange: (h: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
@@ -119,6 +121,14 @@ export function Controls(props: Props) {
         step={1}
         value={props.blur}
         onChange={props.onBlurChange}
+      />
+      <Slider
+        label="Dureza"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.hardness}
+        onChange={props.onHardnessChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
