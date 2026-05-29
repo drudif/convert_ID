@@ -42,6 +42,28 @@ function drawBlob(
   ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
 }
 
+function drawBlobMask(
+  ctx: CanvasRenderingContext2D,
+  blob: CompositionBlob,
+  variant: BlobStops,
+  width: number,
+  height: number,
+  hardness: number,
+): void {
+  const minDim = Math.min(width, height);
+  const cx = blob.x * width;
+  const cy = blob.y * height;
+  const r = blob.radius * minDim;
+
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  const transformedStops = applyHardness(variant.stops, hardness);
+  for (const stop of transformedStops) {
+    grad.addColorStop(stop.offset, `rgba(255, 255, 255, ${stop.alpha})`);
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+}
+
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const { width, height, palette, composition, grain, blur, fluidez } = params;
   target.width = width;
@@ -53,22 +75,29 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Render blobs with full color gradients (source-over keeps palette colors true).
-  const blobLayer = document.createElement('canvas');
-  blobLayer.width = width;
-  blobLayer.height = height;
-  const blobCtx = blobLayer.getContext('2d')!;
-
+  // 2. Color layer — full color gradients, source-over (palette colors stay true).
+  const colorLayer = document.createElement('canvas');
+  colorLayer.width = width;
+  colorLayer.height = height;
+  const colorCtx = colorLayer.getContext('2d')!;
   for (const blob of composition.blobs) {
     const variant = palette.blobVariants[blob.variantIdx];
-    drawBlob(blobCtx, blob, variant, width, height, params.hardness);
+    drawBlob(colorCtx, blob, variant, width, height, params.hardness);
   }
 
-  // 3. Composite blurred colors clipped by a contrast-enhanced alpha mask.
-  // Two passes on the same blobLayer:
-  //   3a — blur only, copies smoothly-blended colors onto scratch (no RGB distortion);
-  //   3b — blur + contrast with destination-in, where only the source ALPHA matters,
-  //        so contrast shapes the metaball silhouette without touching colors.
+  // 3. Mask layer — white-on-alpha blobs with 'lighter' so alphas truly add up.
+  // This accumulated alpha field is what blur+contrast turns into a metaball silhouette.
+  const maskLayer = document.createElement('canvas');
+  maskLayer.width = width;
+  maskLayer.height = height;
+  const maskCtx = maskLayer.getContext('2d')!;
+  maskCtx.globalCompositeOperation = 'lighter';
+  for (const blob of composition.blobs) {
+    const variant = palette.blobVariants[blob.variantIdx];
+    drawBlobMask(maskCtx, blob, variant, width, height, params.hardness);
+  }
+
+  // 4. Compose blurred colors clipped by the metaball mask.
   const minDim = Math.min(width, height);
   const scaledBlur = blur * (minDim / 1080);
   const contrastFactor = 1 + fluidez * 24;
@@ -78,25 +107,27 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   scratch.height = height;
   const scratchCtx = scratch.getContext('2d')!;
 
-  // 3a: blurred colors — no contrast, hues preserved
+  // 4a: blurred colors — no contrast, hues preserved
   scratchCtx.filter = scaledBlur > 0 ? `blur(${scaledBlur}px)` : 'none';
-  scratchCtx.drawImage(blobLayer, 0, 0);
+  scratchCtx.drawImage(colorLayer, 0, 0);
 
-  // 3b: metaball mask via destination-in (only the alpha of the source affects the mask)
+  // 4b: clip to metaball silhouette (blur+contrast on accumulated alpha mask).
+  // destination-in keeps only pixels where the source has non-zero alpha; the source's
+  // RGB is ignored, so contrast distortion never reaches the visible colors.
   if (fluidez > 0) {
     const maskFilter = scaledBlur > 0
       ? `blur(${scaledBlur}px) contrast(${contrastFactor})`
       : `contrast(${contrastFactor})`;
     scratchCtx.filter = maskFilter;
     scratchCtx.globalCompositeOperation = 'destination-in';
-    scratchCtx.drawImage(blobLayer, 0, 0);
+    scratchCtx.drawImage(maskLayer, 0, 0);
     scratchCtx.globalCompositeOperation = 'source-over';
   }
   scratchCtx.filter = 'none';
 
-  // 4. Composite onto target
+  // 5. Composite onto target
   targetCtx.drawImage(scratch, 0, 0);
 
-  // 5. Grain overlay
+  // 6. Grain overlay
   applyGrain(target, grain);
 }
