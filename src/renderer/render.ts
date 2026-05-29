@@ -53,12 +53,13 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Blob layer on offscreen canvas with additive blending
+  // 2. Blob layer on offscreen canvas with normal alpha compositing.
+  // Merging is handled vectorially by the blur+contrast filter below (step 3),
+  // so colors stay true to the palette instead of saturating to white in overlaps.
   const offscreen = document.createElement('canvas');
   offscreen.width = width;
   offscreen.height = height;
   const offCtx = offscreen.getContext('2d')!;
-  offCtx.globalCompositeOperation = 'lighter';
 
   for (const blob of composition.blobs) {
     const variant = palette.blobVariants[blob.variantIdx];
