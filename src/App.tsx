@@ -22,7 +22,7 @@ export default function App() {
   );
 
   const composition = useMemo(
-    () => generateComposition(seed, blobCount, palette),
+    () => generateComposition(seed, blobCount, palette, 0),
     [seed, blobCount, palette],
   );
 
