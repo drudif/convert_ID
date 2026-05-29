@@ -1,5 +1,5 @@
 import { applyGrain } from './grain';
-import type { BlobStops, CompositionBlob, RenderParams } from '../types';
+import type { BlobStops, CompositionBlob, GradientStop, RenderParams } from '../types';
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
@@ -15,12 +15,18 @@ function rgba(color: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+export function applyHardness(stops: GradientStop[], hardness: number): GradientStop[] {
+  const factor = 1 - hardness;
+  return stops.map((s) => ({ ...s, offset: s.offset * factor }));
+}
+
 function drawBlob(
   ctx: CanvasRenderingContext2D,
   blob: CompositionBlob,
   variant: BlobStops,
   width: number,
   height: number,
+  hardness: number,
 ): void {
   const minDim = Math.min(width, height);
   const cx = blob.x * width;
@@ -28,11 +34,11 @@ function drawBlob(
   const r = blob.radius * minDim;
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  for (const stop of variant.stops) {
+  const transformedStops = applyHardness(variant.stops, hardness);
+  for (const stop of transformedStops) {
     grad.addColorStop(stop.offset, rgba(stop.color, stop.alpha));
   }
   ctx.fillStyle = grad;
-  // Fill a square that bounds the gradient (cheaper than fillRect of whole canvas)
   ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
 }
 
@@ -56,7 +62,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
 
   for (const blob of composition.blobs) {
     const variant = palette.blobVariants[blob.variantIdx];
-    drawBlob(offCtx, blob, variant, width, height);
+    drawBlob(offCtx, blob, variant, width, height, params.hardness);
   }
 
   // 3. Blit offscreen onto target with one blur pass
