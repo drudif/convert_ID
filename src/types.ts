@@ -37,5 +37,6 @@ export type RenderParams = {
   blur: number;         // "1080p-equivalent" px; scaled at render time
   hardness: number;     // 0–1; compresses gradient stops toward center
   irregularity: number; // 0–1; cluster jitter on each blob
-  fluidez: number;      // 0–1; CSS contrast amount for metaball fusion
+  fluidez: number;      // 0–1; lowers the metaball threshold (wider silhouette)
+  distribution: number; // 0–1; 0=outer band dominates, 0.5=equal-area, 1=inner band dominates
 };

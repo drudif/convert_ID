@@ -19,6 +19,7 @@ export default function App() {
   const [blur, setBlur] = useState(120);
   const [hardness, setHardness] = useState(0);
   const [fluidez, setFluidez] = useState(0);
+  const [distribution, setDistribution] = useState(0.5);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -42,6 +43,7 @@ export default function App() {
     hardness,
     irregularity,
     fluidez,
+    distribution,
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
@@ -77,6 +79,7 @@ export default function App() {
         blur={blur}
         hardness={hardness}
         fluidez={fluidez}
+        distribution={distribution}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -87,6 +90,7 @@ export default function App() {
         onBlurChange={setBlur}
         onHardnessChange={setHardness}
         onFluidezChange={setFluidez}
+        onDistributionChange={setDistribution}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

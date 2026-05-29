@@ -101,19 +101,27 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     return { cx: b.x * width, cy: b.y * height, rSq: r * r };
   });
 
-  // 4. Heat-map mapping driven by fluidez.
-  // Each blob contributes f = r²/d² (classic inverse-square metaball field).
-  // The silhouette is where Σf > threshold; INSIDE the silhouette, the gradient
-  // offset is field-to-offset mapped (high field → Centro, low field → edge stop).
-  //   - low fluidez → high threshold, tight silhouette, hot core concentrated
-  //   - high fluidez → low threshold, wide silhouette merging adjacent blobs,
-  //     stretched colour gradient throughout the metaball
+  // 4. Heat-map mapping driven by fluidez and distribution.
+  //
+  // Each blob contributes f = r²/d² (inverse-square metaball field).
+  // Silhouette = where Σf > threshold; inside, colour comes from a power-law
+  // mapping of field to gradient offset:
+  //
+  //     heatOffset = (threshold / totalField) ^ γ
+  //
+  // γ = 1 makes the colour bands cover equal AREA inside the silhouette
+  // (since area inside field=f scales like 1/f), independent of fluidez —
+  // so a heavy outer ring no longer "naturally" wins. γ controls the bias:
+  //   - γ < 1 → Centro shrinks, Anel 2 dominates (the old behaviour)
+  //   - γ = 1 → equal area per band
+  //   - γ > 1 → Centro inflates
+  // distribution slider 0..1 maps to γ = 2^(2·distribution - 1) so 0.5 sits
+  // on the equal-area point.
   const threshold = 1.0 - fluidez * 0.85;            // [0.15, 1.0]
   const edgeBand = Math.max(0.02, threshold * 0.08); // small — silhouette stays clean
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
-  const peakField = threshold * 6;                   // field where heat saturates to Centro
-  const heatRange = peakField - threshold;
+  const gamma = Math.pow(2, 2 * params.distribution - 1);
 
   // 5. Per-pixel evaluation. Inner loop has no sqrt and no LUT lookup per blob;
   // a single LUT sample happens once per visible pixel.
@@ -135,10 +143,9 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       const inside = smoothstep(edgeLo, edgeHi, totalField);
       if (inside <= 0) continue;
 
-      // Field → heat offset (linear; clamped). Higher field = hotter = lower offset.
-      let heatOffset = 1 - (totalField - threshold) / heatRange;
-      if (heatOffset < 0) heatOffset = 0;
-      else if (heatOffset > 1) heatOffset = 1;
+      // Field → heat offset via power law (equal-area at γ=1; distribution biases).
+      let heatOffset = Math.pow(threshold / totalField, gamma);
+      if (heatOffset > 1) heatOffset = 1;
       const lutIdx = (heatOffset * 255) | 0;
 
       const a = inside;
