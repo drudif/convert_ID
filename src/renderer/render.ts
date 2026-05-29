@@ -53,31 +53,50 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Blob layer on offscreen canvas with normal alpha compositing.
-  // Merging is handled vectorially by the blur+contrast filter below (step 3),
-  // so colors stay true to the palette instead of saturating to white in overlaps.
-  const offscreen = document.createElement('canvas');
-  offscreen.width = width;
-  offscreen.height = height;
-  const offCtx = offscreen.getContext('2d')!;
+  // 2. Render blobs with full color gradients (source-over keeps palette colors true).
+  const blobLayer = document.createElement('canvas');
+  blobLayer.width = width;
+  blobLayer.height = height;
+  const blobCtx = blobLayer.getContext('2d')!;
 
   for (const blob of composition.blobs) {
     const variant = palette.blobVariants[blob.variantIdx];
-    drawBlob(offCtx, blob, variant, width, height, params.hardness);
+    drawBlob(blobCtx, blob, variant, width, height, params.hardness);
   }
 
-  // 3. Blit offscreen onto target with one blur pass
+  // 3. Composite blurred colors clipped by a contrast-enhanced alpha mask.
+  // Two passes on the same blobLayer:
+  //   3a — blur only, copies smoothly-blended colors onto scratch (no RGB distortion);
+  //   3b — blur + contrast with destination-in, where only the source ALPHA matters,
+  //        so contrast shapes the metaball silhouette without touching colors.
   const minDim = Math.min(width, height);
   const scaledBlur = blur * (minDim / 1080);
   const contrastFactor = 1 + fluidez * 24;
-  const filterParts: string[] = [];
-  if (scaledBlur > 0) filterParts.push(`blur(${scaledBlur}px)`);
-  if (fluidez > 0) filterParts.push(`contrast(${contrastFactor})`);
-  targetCtx.save();
-  targetCtx.filter = filterParts.length > 0 ? filterParts.join(' ') : 'none';
-  targetCtx.drawImage(offscreen, 0, 0);
-  targetCtx.restore();
 
-  // 4. Grain overlay
+  const scratch = document.createElement('canvas');
+  scratch.width = width;
+  scratch.height = height;
+  const scratchCtx = scratch.getContext('2d')!;
+
+  // 3a: blurred colors — no contrast, hues preserved
+  scratchCtx.filter = scaledBlur > 0 ? `blur(${scaledBlur}px)` : 'none';
+  scratchCtx.drawImage(blobLayer, 0, 0);
+
+  // 3b: metaball mask via destination-in (only the alpha of the source affects the mask)
+  if (fluidez > 0) {
+    const maskFilter = scaledBlur > 0
+      ? `blur(${scaledBlur}px) contrast(${contrastFactor})`
+      : `contrast(${contrastFactor})`;
+    scratchCtx.filter = maskFilter;
+    scratchCtx.globalCompositeOperation = 'destination-in';
+    scratchCtx.drawImage(blobLayer, 0, 0);
+    scratchCtx.globalCompositeOperation = 'source-over';
+  }
+  scratchCtx.filter = 'none';
+
+  // 4. Composite onto target
+  targetCtx.drawImage(scratch, 0, 0);
+
+  // 5. Grain overlay
   applyGrain(target, grain);
 }
