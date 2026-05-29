@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PALETTES } from '../../src/data/palettes';
+import { PALETTES, buildCustomPalette } from '../../src/data/palettes';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -46,5 +46,39 @@ describe('palettes', () => {
     const aurora = PALETTES.find((p) => p.id === 'aurora')!;
     expect(aurora.blobVariants.length).toBe(2);
     expect(aurora.variantWeights).toEqual([0.7, 0.3]);
+  });
+});
+
+describe('buildCustomPalette', () => {
+  const sampleColors: [string, string, string, string, string] = [
+    '#111111', '#ff0000', '#00ff00', '#0000ff', '#ffffff',
+  ];
+
+  it('returns a Palette with id="custom" and the given background', () => {
+    const palette = buildCustomPalette(sampleColors);
+    expect(palette.id).toBe('custom');
+    expect(palette.background).toBe('#111111');
+  });
+
+  it('produces 1 variant with 4 stops', () => {
+    const palette = buildCustomPalette(sampleColors);
+    expect(palette.blobVariants).toHaveLength(1);
+    expect(palette.blobVariants[0].stops).toHaveLength(4);
+  });
+
+  it('assigns colors to stops in order (centro, anel 1, anel 2, borda)', () => {
+    const palette = buildCustomPalette(sampleColors);
+    const stops = palette.blobVariants[0].stops;
+    expect(stops[0].color).toBe('#ff0000');
+    expect(stops[1].color).toBe('#00ff00');
+    expect(stops[2].color).toBe('#0000ff');
+    expect(stops[3].color).toBe('#ffffff');
+  });
+
+  it('uses fixed alphas [1.0, 0.85, 0.5, 0.0] and offsets [0, 0.33, 0.66, 1]', () => {
+    const palette = buildCustomPalette(sampleColors);
+    const stops = palette.blobVariants[0].stops;
+    expect(stops.map((s) => s.alpha)).toEqual([1.0, 0.85, 0.5, 0.0]);
+    expect(stops.map((s) => s.offset)).toEqual([0, 0.33, 0.66, 1]);
   });
 });

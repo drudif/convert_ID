@@ -54,3 +54,23 @@ export const PALETTES: Palette[] = [
     variantWeights: [0.7, 0.3],
   },
 ];
+
+export function buildCustomPalette(
+  colors: [string, string, string, string, string],
+): Palette {
+  return {
+    id: 'custom',
+    name: 'Custom',
+    background: colors[0],
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,    color: colors[1], alpha: 1.0  },
+          { offset: 0.33, color: colors[2], alpha: 0.85 },
+          { offset: 0.66, color: colors[3], alpha: 0.5  },
+          { offset: 1,    color: colors[4], alpha: 0    },
+        ],
+      },
+    ],
+  };
+}
