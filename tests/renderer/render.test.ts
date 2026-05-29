@@ -14,6 +14,8 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     composition: generateComposition(1, 3, nightfall),
     grain: 0.5,
     blur: 60,
+    hardness: 0,
+    irregularity: 0,
     ...overrides,
   };
 }

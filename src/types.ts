@@ -33,6 +33,8 @@ export type RenderParams = {
   height: number;
   palette: Palette;
   composition: Composition;
-  grain: number;   // 0–1
-  blur: number;    // "1080p-equivalent" px; scaled at render time
+  grain: number;        // 0–1
+  blur: number;         // "1080p-equivalent" px; scaled at render time
+  hardness: number;     // 0–1; compresses gradient stops toward center
+  irregularity: number; // 0–1; cluster jitter on each blob
 };

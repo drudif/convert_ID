@@ -33,6 +33,8 @@ export default function App() {
     composition,
     grain,
     blur,
+    hardness: 0,
+    irregularity: 0,
   };
 
   const handleRandomize = () => {
