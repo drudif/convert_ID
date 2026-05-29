@@ -23,7 +23,7 @@ type GradientLut = {
   b: Uint8ClampedArray;
 };
 
-function buildLut(stops: GradientStop[]): GradientLut {
+function buildLut(stops: GradientStop[], bg: { r: number; g: number; b: number }): GradientLut {
   const N = 256;
   const r = new Uint8ClampedArray(N);
   const g = new Uint8ClampedArray(N);
@@ -51,20 +51,25 @@ function buildLut(stops: GradientStop[]): GradientLut {
     b[i] = lo.b + (hi.b - lo.b) * f;
   }
 
-  // Stops with alpha=0 are meant as "fade to bg" markers (v1 semantic) — their
-  // RGB shouldn't drive the silhouette edge colour. Find the last STOP with
-  // alpha > 0.05 and replace any LUT entries past that stop's offset with its
-  // exact colour, so the edge of the metaball reads as that stop, not an
-  // interpolated near-transparent value.
-  let lastVisible = rgbStops[0];
-  for (let i = rgbStops.length - 1; i >= 0; i--) {
-    if (rgbStops[i].alpha > 0.05) { lastVisible = rgbStops[i]; break; }
-  }
-  const cutoff = Math.round(lastVisible.offset * (N - 1));
-  for (let i = cutoff + 1; i < N; i++) {
-    r[i] = lastVisible.r;
-    g[i] = lastVisible.g;
-    b[i] = lastVisible.b;
+  // When the LAST stop is alpha<0.05 it's a "fade marker" (v1 semantic), and
+  // its RGB shouldn't appear at the silhouette edge. Instead, fade smoothly
+  // from the last VISIBLE stop's colour to the background across the rest of
+  // the LUT — so Dureza/Distribuição compress that fade band too, instead of
+  // leaving a solid slab of one colour past the visible stops.
+  const lastStop = rgbStops[rgbStops.length - 1];
+  if (lastStop.alpha < 0.05) {
+    let lastVisible = rgbStops[0];
+    for (let i = rgbStops.length - 1; i >= 0; i--) {
+      if (rgbStops[i].alpha > 0.05) { lastVisible = rgbStops[i]; break; }
+    }
+    const cutoff = Math.round(lastVisible.offset * (N - 1));
+    const span = (N - 1) - cutoff;
+    for (let i = cutoff + 1; i < N; i++) {
+      const t = span > 0 ? (i - cutoff) / span : 1;
+      r[i] = lastVisible.r * (1 - t) + bg.r * t;
+      g[i] = lastVisible.g * (1 - t) + bg.g * t;
+      b[i] = lastVisible.b * (1 - t) + bg.b * t;
+    }
   }
 
   return { r, g, b };
@@ -92,7 +97,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   // distance to any individual blob, so the whole image reads as one heat map.
   // (Multi-variant palettes use variant 0; per-blob variants are a v1 concept
   // that doesn't translate to heat-map mode.)
-  const lut = buildLut(applyHardness(palette.blobVariants[0].stops, hardness));
+  const lut = buildLut(applyHardness(palette.blobVariants[0].stops, hardness), bg);
 
   // 3. Pre-compute per-blob field params (just position and r² — no per-blob LUT).
   const minDim = Math.min(width, height);

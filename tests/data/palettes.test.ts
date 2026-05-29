@@ -75,10 +75,10 @@ describe('buildCustomPalette', () => {
     expect(stops[3].color).toBe('#ffffff');
   });
 
-  it('uses fixed alphas [1.0, 0.85, 0.5, 0.0] and offsets [0, 0.33, 0.66, 1]', () => {
+  it('uses fixed alphas [1.0, 0.85, 0.5, 1.0] and offsets [0, 0.33, 0.66, 1]', () => {
     const palette = buildCustomPalette(sampleColors);
     const stops = palette.blobVariants[0].stops;
-    expect(stops.map((s) => s.alpha)).toEqual([1.0, 0.85, 0.5, 0.0]);
+    expect(stops.map((s) => s.alpha)).toEqual([1.0, 0.85, 0.5, 1.0]);
     expect(stops.map((s) => s.offset)).toEqual([0, 0.33, 0.66, 1]);
   });
 });
