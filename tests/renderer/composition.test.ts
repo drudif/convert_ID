@@ -12,9 +12,9 @@ describe('generateComposition', () => {
     expect(a).toEqual(b);
   });
 
-  it('produces blobCount blobs', () => {
+  it('produces blobCount * 8 blobs (clusters of 8 minis per logical blob)', () => {
     const comp = generateComposition(1, 5, nightfall, 0);
-    expect(comp.blobs).toHaveLength(5);
+    expect(comp.blobs).toHaveLength(40);
   });
 
   it('records the seed', () => {
@@ -32,11 +32,11 @@ describe('generateComposition', () => {
     }
   });
 
-  it('radius is in [0.2, 0.5]', () => {
-    const comp = generateComposition(7, 8, nightfall, 0);
+  it('radius is positive and < 1 (scaled by 1/sqrt(8) from baseR plus variation)', () => {
+    const comp = generateComposition(7, 8, nightfall, 0.5);
     for (const b of comp.blobs) {
-      expect(b.radius).toBeGreaterThanOrEqual(0.2);
-      expect(b.radius).toBeLessThanOrEqual(0.5);
+      expect(b.radius).toBeGreaterThan(0);
+      expect(b.radius).toBeLessThan(1);
     }
   });
 
@@ -49,17 +49,26 @@ describe('generateComposition', () => {
   });
 
   it('over many blobs, aurora variant weights roughly match (0.7 / 0.3)', () => {
+    // All 8 minis in a cluster share the same variantIdx; sample one per cluster.
     const comp = generateComposition(42, 1000, aurora, 0);
     const counts = [0, 0];
-    for (const b of comp.blobs) counts[b.variantIdx]++;
+    for (let i = 0; i < comp.blobs.length; i += 8) counts[comp.blobs[i].variantIdx]++;
     const ratio0 = counts[0] / 1000;
     expect(ratio0).toBeGreaterThan(0.6);
     expect(ratio0).toBeLessThan(0.8);
   });
 
-  it('irregularity=0 produces exactly blobCount blobs', () => {
+  it('irregularity=0 collapses each cluster to identical stacked minis', () => {
     const comp = generateComposition(5, 3, nightfall, 0);
-    expect(comp.blobs).toHaveLength(3);
+    expect(comp.blobs).toHaveLength(24);
+    for (let g = 0; g < 3; g++) {
+      const group = comp.blobs.slice(g * 8, g * 8 + 8);
+      for (const m of group) {
+        expect(m.x).toBe(group[0].x);
+        expect(m.y).toBe(group[0].y);
+        expect(m.radius).toBe(group[0].radius);
+      }
+    }
   });
 
   it('irregularity>0 produces blobCount * 8 blobs', () => {
