@@ -14,6 +14,7 @@ type Props = {
   width: number;
   height: number;
   paletteId: string;
+  customColors: [string, string, string, string, string];
   blobCount: number;
   irregularity: number;
   grain: number;
@@ -22,6 +23,7 @@ type Props = {
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
+  onCustomColorChange: (idx: number, color: string) => void;
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
@@ -30,6 +32,8 @@ type Props = {
   onRandomize: () => void;
   onDownload: () => void;
 };
+
+const CUSTOM_SLOT_LABELS = ['Fundo', 'Centro', 'Anel 1', 'Anel 2', 'Borda'];
 
 function clampDim(n: number): number {
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -97,7 +101,39 @@ export function Controls(props: Props) {
               {p.name}
             </button>
           ))}
+          <button
+            key="custom"
+            onClick={() => props.onPaletteChange('custom')}
+            style={chipStyle(props.paletteId === 'custom')}
+          >
+            Custom
+          </button>
         </div>
+        {props.paletteId === 'custom' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            {CUSTOM_SLOT_LABELS.map((label, idx) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>{label}</label>
+                <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>
+                  {props.customColors[idx]}
+                </span>
+                <input
+                  type="color"
+                  value={props.customColors[idx]}
+                  onChange={(e) => props.onCustomColorChange(idx, e.target.value)}
+                  style={{
+                    width: 36,
+                    height: 24,
+                    border: '1px solid #2a2a30',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <Slider
