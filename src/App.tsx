@@ -11,6 +11,7 @@ export default function App() {
   const [height, setHeight] = useState(1080);
   const [paletteId, setPaletteId] = useState('nightfall');
   const [blobCount, setBlobCount] = useState(3);
+  const [irregularity, setIrregularity] = useState(0);
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
   const [hardness, setHardness] = useState(0);
@@ -23,8 +24,8 @@ export default function App() {
   );
 
   const composition = useMemo(
-    () => generateComposition(seed, blobCount, palette, 0),
-    [seed, blobCount, palette],
+    () => generateComposition(seed, blobCount, palette, irregularity),
+    [seed, blobCount, palette, irregularity],
   );
 
   const params: RenderParams = {
@@ -35,7 +36,7 @@ export default function App() {
     grain,
     blur,
     hardness,
-    irregularity: 0,
+    irregularity,
   };
 
   const handleRandomize = () => {
@@ -57,6 +58,7 @@ export default function App() {
         height={height}
         paletteId={paletteId}
         blobCount={blobCount}
+        irregularity={irregularity}
         grain={grain}
         blur={blur}
         hardness={hardness}
@@ -64,6 +66,7 @@ export default function App() {
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
         onBlobCountChange={setBlobCount}
+        onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
         onBlurChange={setBlur}
         onHardnessChange={setHardness}

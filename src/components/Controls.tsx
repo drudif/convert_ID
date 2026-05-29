@@ -15,6 +15,7 @@ type Props = {
   height: number;
   paletteId: string;
   blobCount: number;
+  irregularity: number;
   grain: number;
   blur: number;
   hardness: number;
@@ -22,6 +23,7 @@ type Props = {
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
   onBlobCountChange: (n: number) => void;
+  onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
   onBlurChange: (b: number) => void;
   onHardnessChange: (h: number) => void;
@@ -105,6 +107,14 @@ export function Controls(props: Props) {
         step={1}
         value={props.blobCount}
         onChange={props.onBlobCountChange}
+      />
+      <Slider
+        label="Irregularidade"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.irregularity}
+        onChange={props.onIrregularityChange}
       />
       <Slider
         label="Grão"
