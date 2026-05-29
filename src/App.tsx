@@ -14,6 +14,7 @@ export default function App() {
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
   const [seed, setSeed] = useState(1);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const palette = useMemo(
     () => PALETTES.find((p) => p.id === paletteId) ?? PALETTES[0],
@@ -39,9 +40,10 @@ export default function App() {
   };
 
   const handleDownload = () => {
-    exportPNG(params).catch((err) => {
+    setExportError(null);
+    exportPNG(params).catch((err: unknown) => {
       console.error(err);
-      alert(err.message ?? 'Falha ao exportar.');
+      setExportError(err instanceof Error ? err.message : 'Falha ao exportar.');
     });
   };
 
@@ -66,11 +68,26 @@ export default function App() {
       <main style={{
         flex: 1,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 32,
         overflow: 'hidden',
+        gap: 12,
       }}>
+        {exportError && (
+          <p style={{
+            color: '#fca5a5',
+            background: 'rgba(220, 38, 38, 0.15)',
+            border: '1px solid rgba(220, 38, 38, 0.4)',
+            padding: '8px 12px',
+            borderRadius: 4,
+            margin: 0,
+            fontSize: 13,
+          }}>
+            {exportError}
+          </p>
+        )}
         <Preview params={params} />
       </main>
     </div>

@@ -12,7 +12,12 @@ export function exportFilename(
 
 export async function exportPNG(params: RenderParams): Promise<void> {
   const canvas = document.createElement('canvas');
-  render(canvas, params);
+  try {
+    render(canvas, params);
+  } catch (err) {
+    console.error('Export render failed', err);
+    throw new Error('Failed to export — try a smaller resolution.');
+  }
 
   const blob: Blob | null = await new Promise((resolve) =>
     canvas.toBlob(resolve, 'image/png'),
