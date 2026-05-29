@@ -34,7 +34,6 @@ function buildLut(stops: GradientStop[]): GradientLut {
 
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    // Locate the stop interval containing t
     let lo = rgbStops[0];
     let hi = rgbStops[rgbStops.length - 1];
     for (let k = 0; k < rgbStops.length - 1; k++) {
@@ -53,6 +52,25 @@ function buildLut(stops: GradientStop[]): GradientLut {
     g[i] = lo.g + (hi.g - lo.g) * f;
     b[i] = lo.b + (hi.b - lo.b) * f;
     a[i] = lo.alpha + (hi.alpha - lo.alpha) * f;
+  }
+
+  // Extend the last *visible* color across the rest of the LUT.
+  // Palettes typically end with alpha=0 ("borda") which is the natural
+  // soft-falloff edge for v1-style rendering — but in metaball mode the
+  // silhouette comes from the field, so we need the colour to persist
+  // beyond the nominal blob radius rather than vanish to black.
+  let lastVisibleIdx = 0;
+  for (let i = N - 1; i >= 0; i--) {
+    if (a[i] > 0.05) { lastVisibleIdx = i; break; }
+  }
+  const extR = r[lastVisibleIdx];
+  const extG = g[lastVisibleIdx];
+  const extB = b[lastVisibleIdx];
+  for (let i = lastVisibleIdx + 1; i < N; i++) {
+    r[i] = extR;
+    g[i] = extG;
+    b[i] = extB;
+    // a[i] kept as-is (already faded near 0); silhouette alpha takes over
   }
   return { r, g, b, a };
 }
@@ -93,18 +111,22 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   // 3. Metaball field threshold and edge softness driven by fluidez.
   // Each blob contributes f = r²/d² (classic inverse-square field).
   // A single blob has f = 1 at d = r (its nominal edge).
-  // Lower threshold → blobs merge across larger gaps; higher → blobs stay isolated.
-  // Edge band gives smooth fluid silhouette instead of binary threshold.
-  const threshold = 1.0 - fluidez * 0.85;     // [0.15, 1.0]
-  const edgeBand = Math.max(0.05, threshold * 0.45);
+  // Lower threshold → silhouette extends further → blobs merge over wider gaps.
+  // Edge band: tight at fluidez=0 (near-binary outline) → wide at fluidez=1
+  // (soft oil-drop falloff).
+  const threshold = 1.0 - fluidez * 0.85;             // [0.15, 1.0]
+  const edgeBand = Math.max(0.03, fluidez * 0.6);     // [0.03, 0.6]
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
 
-  // 4. Per-pixel metaball evaluation. ImageData write is one allocation.
+  // 4. Per-pixel metaball evaluation. Silhouette comes entirely from the field;
+  // colour is field-weighted gradient sample (LUT alpha is unused — it would
+  // re-introduce the "invisible beyond nominal radius" problem the LUT extension
+  // above is meant to fix).
   const img = targetCtx.getImageData(0, 0, width, height);
   const data = img.data;
   const nBlobs = blobs.length;
-  const EPS = 0.5; // pixel² — prevents singularity at exact center
+  const EPS = 0.5;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -112,7 +134,6 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       let wR = 0;
       let wG = 0;
       let wB = 0;
-      let wA = 0;
 
       for (let i = 0; i < nBlobs; i++) {
         const b = blobs[i];
@@ -122,29 +143,24 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
         const f = b.rSq / d2;
         totalField += f;
 
-        // Sample blob's gradient at d/r (clamped to [0,1]); weight by f.
         const d = Math.sqrt(d2);
         const ratio = d * b.invR;
         const lutIdx = ratio >= 1 ? 255 : (ratio * 255) | 0;
         wR += b.lut.r[lutIdx] * f;
         wG += b.lut.g[lutIdx] * f;
         wB += b.lut.b[lutIdx] * f;
-        wA += b.lut.a[lutIdx] * f;
       }
 
-      // Smooth metaball threshold — no hard cliff at the boundary.
       const inside = smoothstep(edgeLo, edgeHi, totalField);
-      if (inside <= 0) continue; // already painted with bg color
+      if (inside <= 0) continue;
 
-      // Field-weighted color blend across contributing blobs.
       const inv = 1 / totalField;
       const cR = wR * inv;
       const cG = wG * inv;
       const cB = wB * inv;
-      const cA = wA * inv;
 
-      // Composite over background: src-over with effective alpha = inside * cA.
-      const a = inside * cA;
+      // Final alpha = silhouette only. Composite over background.
+      const a = inside;
       const ia = 1 - a;
       const idx = (y * width + x) << 2;
       data[idx]     = cR * a + bg.r * ia;
