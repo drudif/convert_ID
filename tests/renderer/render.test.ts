@@ -11,13 +11,14 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     width: 200,
     height: 200,
     palette: nightfall,
-    composition: generateComposition(1, 3, nightfall, 0),
+    composition: generateComposition(1, 3, nightfall),
     grain: 0.5,
     blur: 60,
-    hardness: 0,
     irregularity: 0,
     fluidez: 0,
-    distribution: 0.5,
+    centroWeight: 0.33,
+    anel1Weight: 0.33,
+    anel2Weight: 0.34,
     ...overrides,
   };
 }

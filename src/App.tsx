@@ -17,9 +17,10 @@ export default function App() {
   const [irregularity, setIrregularity] = useState(0);
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
-  const [hardness, setHardness] = useState(0);
   const [fluidez, setFluidez] = useState(0);
-  const [distribution, setDistribution] = useState(0.5);
+  const [centroWeight, setCentroWeight] = useState(0.33);
+  const [anel1Weight, setAnel1Weight] = useState(0.33);
+  const [anel2Weight, setAnel2Weight] = useState(0.34);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -29,8 +30,8 @@ export default function App() {
   }, [paletteId, customColors]);
 
   const composition = useMemo(
-    () => generateComposition(seed, blobCount, palette, irregularity),
-    [seed, blobCount, palette, irregularity],
+    () => generateComposition(seed, blobCount, palette),
+    [seed, blobCount, palette],
   );
 
   const params: RenderParams = {
@@ -40,10 +41,11 @@ export default function App() {
     composition,
     grain,
     blur,
-    hardness,
     irregularity,
     fluidez,
-    distribution,
+    centroWeight,
+    anel1Weight,
+    anel2Weight,
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
@@ -77,9 +79,10 @@ export default function App() {
         irregularity={irregularity}
         grain={grain}
         blur={blur}
-        hardness={hardness}
         fluidez={fluidez}
-        distribution={distribution}
+        centroWeight={centroWeight}
+        anel1Weight={anel1Weight}
+        anel2Weight={anel2Weight}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -88,9 +91,10 @@ export default function App() {
         onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
         onBlurChange={setBlur}
-        onHardnessChange={setHardness}
         onFluidezChange={setFluidez}
-        onDistributionChange={setDistribution}
+        onCentroWeightChange={setCentroWeight}
+        onAnel1WeightChange={setAnel1Weight}
+        onAnel2WeightChange={setAnel2Weight}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

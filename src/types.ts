@@ -16,11 +16,19 @@ export type Palette = {
   variantWeights?: number[];   // optional; parallel to blobVariants; uniform if omitted
 };
 
+export type BlobHarmonics = {
+  // Outline distortion: r(θ) = baseR * (1 + irregularity · Σ amps[k]·sin((k+2)·θ + phases[k]))
+  // Three harmonics (k=2,3,4 modes) give organic non-circular silhouettes.
+  amps: [number, number, number];   // each in [-1, 1]
+  phases: [number, number, number]; // each in [0, 2π]
+};
+
 export type CompositionBlob = {
-  x: number;          // 0–1 normalized to width
-  y: number;          // 0–1 normalized to height
-  radius: number;     // 0–1 normalized to min(width, height); range [0.2, 0.5]
-  variantIdx: number; // index into palette.blobVariants
+  x: number;             // 0–1 normalized to width
+  y: number;             // 0–1 normalized to height
+  radius: number;        // 0–1 normalized to min(width, height); range [0.2, 0.5]
+  variantIdx: number;    // index into palette.blobVariants
+  harmonics: BlobHarmonics;
 };
 
 export type Composition = {
@@ -35,8 +43,9 @@ export type RenderParams = {
   composition: Composition;
   grain: number;        // 0–1
   blur: number;         // "1080p-equivalent" px; scaled at render time
-  hardness: number;     // 0–1; compresses gradient stops toward center
-  irregularity: number; // 0–1; cluster jitter on each blob
+  irregularity: number; // 0–1; amplitude of the per-blob outline distortion
   fluidez: number;      // 0–1; lowers the metaball threshold (wider silhouette)
-  distribution: number; // 0–1; 0=outer band dominates, 0.5=equal-area, 1=inner band dominates
+  centroWeight: number; // 0–1; share of the LUT used by Centro→Anel 1
+  anel1Weight: number;  // 0–1; share used by Anel 1→Anel 2
+  anel2Weight: number;  // 0–1; share used by Anel 2→Borda; sum is clamped to 1
 };

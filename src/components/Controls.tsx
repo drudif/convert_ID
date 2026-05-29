@@ -19,9 +19,10 @@ type Props = {
   irregularity: number;
   grain: number;
   blur: number;
-  hardness: number;
   fluidez: number;
-  distribution: number;
+  centroWeight: number;
+  anel1Weight: number;
+  anel2Weight: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
@@ -30,9 +31,10 @@ type Props = {
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
   onBlurChange: (b: number) => void;
-  onHardnessChange: (h: number) => void;
   onFluidezChange: (f: number) => void;
-  onDistributionChange: (d: number) => void;
+  onCentroWeightChange: (w: number) => void;
+  onAnel1WeightChange: (w: number) => void;
+  onAnel2WeightChange: (w: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
@@ -173,14 +175,6 @@ export function Controls(props: Props) {
         onChange={props.onBlurChange}
       />
       <Slider
-        label="Dureza"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.hardness}
-        onChange={props.onHardnessChange}
-      />
-      <Slider
         label="Fluidez"
         min={0}
         max={1}
@@ -189,12 +183,28 @@ export function Controls(props: Props) {
         onChange={props.onFluidezChange}
       />
       <Slider
-        label="Distribuição"
+        label="Centro"
         min={0}
         max={1}
         step={0.01}
-        value={props.distribution}
-        onChange={props.onDistributionChange}
+        value={props.centroWeight}
+        onChange={props.onCentroWeightChange}
+      />
+      <Slider
+        label="Anel 1"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.anel1Weight}
+        onChange={props.onAnel1WeightChange}
+      />
+      <Slider
+        label="Anel 2"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.anel2Weight}
+        onChange={props.onAnel2WeightChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>

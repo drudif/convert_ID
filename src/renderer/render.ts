@@ -1,6 +1,10 @@
 import { applyGrain } from './grain';
 import type { GradientStop, RenderParams } from '../types';
 
+const TWO_PI = Math.PI * 2;
+const ANGLE_LUT_SIZE = 256;
+const ANGLE_LUT_MASK = ANGLE_LUT_SIZE - 1;
+
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
   return {
@@ -10,13 +14,35 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
+// Kept exported for backward compatibility with existing tests, and as a
+// general helper for future palette transforms. Per-band weights subsume
+// its role in the heat-map pipeline.
 export function applyHardness(stops: GradientStop[], hardness: number): GradientStop[] {
   const factor = 1 - hardness;
   return stops.map((s) => ({ ...s, offset: s.offset * factor }));
 }
 
-// 256-entry colour LUT built from gradient stops. Indexed by heat offset
-// (0 = hottest / Centro, 255 = coldest / silhouette edge).
+// Apply per-band weights to a 4-stop gradient. The widths place each
+// transition along the LUT [0..1]; anything past the sum fades to bg
+// via the buildLut extension.
+function applyBandWeights(
+  stops: GradientStop[],
+  centroW: number,
+  anel1W: number,
+  anel2W: number,
+): GradientStop[] {
+  if (stops.length !== 4) return stops; // only the standard 4-stop palettes are weighted
+  const o1 = Math.min(1, centroW);
+  const o2 = Math.min(1, o1 + anel1W);
+  const o3 = Math.min(1, o2 + anel2W);
+  return [
+    { ...stops[0], offset: 0 },
+    { ...stops[1], offset: o1 },
+    { ...stops[2], offset: o2 },
+    { ...stops[3], offset: o3 },
+  ];
+}
+
 type GradientLut = {
   r: Uint8ClampedArray;
   g: Uint8ClampedArray;
@@ -51,11 +77,10 @@ function buildLut(stops: GradientStop[], bg: { r: number; g: number; b: number }
     b[i] = lo.b + (hi.b - lo.b) * f;
   }
 
-  // When the LAST stop is alpha<0.05 it's a "fade marker" (v1 semantic), and
-  // its RGB shouldn't appear at the silhouette edge. Instead, fade smoothly
-  // from the last VISIBLE stop's colour to the background across the rest of
-  // the LUT — so Dureza/Distribuição compress that fade band too, instead of
-  // leaving a solid slab of one colour past the visible stops.
+  // If the last stop is a fade marker (α<0.05), fade from the last visible
+  // stop's colour to background over the remainder of the LUT — so Dureza-
+  // equivalent compression (low band weights) yields a smooth fade band
+  // rather than a slab of one colour.
   const lastStop = rgbStops[rgbStops.length - 1];
   if (lastStop.alpha < 0.05) {
     let lastVisible = rgbStops[0];
@@ -82,8 +107,26 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
+// Precompute a per-blob outline lookup table indexed by angle, so the
+// per-pixel hot loop only does a lookup + linear interp (no sin calls).
+function buildOutlineLut(amps: number[], phases: number[]): Float32Array {
+  const lut = new Float32Array(ANGLE_LUT_SIZE);
+  for (let i = 0; i < ANGLE_LUT_SIZE; i++) {
+    const angle = (i / ANGLE_LUT_SIZE) * TWO_PI;
+    lut[i] =
+      amps[0] * Math.sin(2 * angle + phases[0]) +
+      amps[1] * Math.sin(3 * angle + phases[1]) +
+      amps[2] * Math.sin(4 * angle + phases[2]);
+  }
+  return lut;
+}
+
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
-  const { width, height, palette, composition, grain, blur, hardness, fluidez } = params;
+  const {
+    width, height, palette, composition,
+    grain, blur, irregularity, fluidez,
+    centroWeight, anel1Weight, anel2Weight,
+  } = params;
   target.width = width;
   target.height = height;
   const targetCtx = target.getContext('2d')!;
@@ -93,43 +136,37 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Single palette LUT — colour comes from total field intensity, not from
-  // distance to any individual blob, so the whole image reads as one heat map.
-  // (Multi-variant palettes use variant 0; per-blob variants are a v1 concept
-  // that doesn't translate to heat-map mode.)
-  const lut = buildLut(applyHardness(palette.blobVariants[0].stops, hardness), bg);
+  // 2. Palette LUT. Per-band weights position the 4 stops on the LUT, then
+  // the buildLut fade-to-bg extension handles the unused tail (sum < 1).
+  const weightedStops = applyBandWeights(
+    palette.blobVariants[0].stops,
+    centroWeight, anel1Weight, anel2Weight,
+  );
+  const lut = buildLut(weightedStops, bg);
 
-  // 3. Pre-compute per-blob field params (just position and r² — no per-blob LUT).
+  // 3. Pre-compute per-blob field params + outline LUT.
   const minDim = Math.min(width, height);
   const blobs = composition.blobs.map((b) => {
     const r = b.radius * minDim;
-    return { cx: b.x * width, cy: b.y * height, rSq: r * r };
+    return {
+      cx: b.x * width,
+      cy: b.y * height,
+      rSq: r * r,
+      outlineLut: buildOutlineLut(b.harmonics.amps, b.harmonics.phases),
+    };
   });
 
-  // 4. Heat-map mapping driven by fluidez and distribution.
-  //
-  // Each blob contributes f = r²/d² (inverse-square metaball field).
-  // Silhouette = where Σf > threshold; inside, colour comes from a power-law
-  // mapping of field to gradient offset:
-  //
-  //     heatOffset = (threshold / totalField) ^ γ
-  //
-  // γ = 1 makes the colour bands cover equal AREA inside the silhouette
-  // (since area inside field=f scales like 1/f), independent of fluidez —
-  // so a heavy outer ring no longer "naturally" wins. γ controls the bias:
-  //   - γ < 1 → Centro shrinks, Anel 2 dominates (the old behaviour)
-  //   - γ = 1 → equal area per band
-  //   - γ > 1 → Centro inflates
-  // distribution slider 0..1 maps to γ = 2^(2·distribution - 1) so 0.5 sits
-  // on the equal-area point.
-  const threshold = 1.0 - fluidez * 0.85;            // [0.15, 1.0]
-  const edgeBand = Math.max(0.02, threshold * 0.08); // small — silhouette stays clean
+  // 4. Heat-map field mapping (equal-area, γ=1). Fluidez lowers threshold to
+  // widen the silhouette and let neighbouring blobs merge into one metaball.
+  // Outline harmonics distort r(θ) — same total field strength per blob,
+  // wavy boundary.
+  const threshold = 1.0 - fluidez * 0.85;
+  const edgeBand = Math.max(0.02, threshold * 0.08);
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
-  const gamma = Math.pow(2, 2 * params.distribution - 1);
+  const outlineGain = irregularity * 0.45; // cap to avoid degenerate r→0
 
-  // 5. Per-pixel evaluation. Inner loop has no sqrt and no LUT lookup per blob;
-  // a single LUT sample happens once per visible pixel.
+  // 5. Per-pixel evaluation.
   const img = targetCtx.getImageData(0, 0, width, height);
   const data = img.data;
   const nBlobs = blobs.length;
@@ -142,14 +179,25 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
         const b = blobs[i];
         const dx = x - b.cx;
         const dy = y - b.cy;
-        totalField += b.rSq / (dx * dx + dy * dy + EPS);
+        const d2 = dx * dx + dy * dy + EPS;
+
+        let effRSq = b.rSq;
+        if (outlineGain > 0) {
+          // Angle → outline LUT index. atan2 returns [-π, π]; remap to [0, 1) then scale.
+          const angle = Math.atan2(dy, dx);
+          const idx = ((angle * (ANGLE_LUT_SIZE / TWO_PI)) + ANGLE_LUT_SIZE) | 0;
+          const lutAt = b.outlineLut[idx & ANGLE_LUT_MASK];
+          const factor = 1 + lutAt * outlineGain;
+          effRSq = b.rSq * factor * factor;
+        }
+        totalField += effRSq / d2;
       }
 
       const inside = smoothstep(edgeLo, edgeHi, totalField);
       if (inside <= 0) continue;
 
-      // Field → heat offset via power law (equal-area at γ=1; distribution biases).
-      let heatOffset = Math.pow(threshold / totalField, gamma);
+      // Equal-area mapping: heatOffset = threshold / totalField.
+      let heatOffset = threshold / totalField;
       if (heatOffset > 1) heatOffset = 1;
       const lutIdx = (heatOffset * 255) | 0;
 
@@ -165,7 +213,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
 
   targetCtx.putImageData(img, 0, 0);
 
-  // 6. Optional post-blur (user's slider) — softens the edge, not load-bearing.
+  // 6. Optional post-blur.
   const scaledBlur = blur * (minDim / 1080);
   if (scaledBlur > 0) {
     const blurred = document.createElement('canvas');
