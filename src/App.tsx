@@ -18,6 +18,7 @@ export default function App() {
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
   const [hardness, setHardness] = useState(0);
+  const [fluidez, setFluidez] = useState(0);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export default function App() {
     blur,
     hardness,
     irregularity,
+    fluidez,
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
@@ -74,6 +76,7 @@ export default function App() {
         grain={grain}
         blur={blur}
         hardness={hardness}
+        fluidez={fluidez}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -83,6 +86,7 @@ export default function App() {
         onGrainChange={setGrain}
         onBlurChange={setBlur}
         onHardnessChange={setHardness}
+        onFluidezChange={setFluidez}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

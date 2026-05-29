@@ -20,6 +20,7 @@ type Props = {
   grain: number;
   blur: number;
   hardness: number;
+  fluidez: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
@@ -29,6 +30,7 @@ type Props = {
   onGrainChange: (g: number) => void;
   onBlurChange: (b: number) => void;
   onHardnessChange: (h: number) => void;
+  onFluidezChange: (f: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
@@ -175,6 +177,14 @@ export function Controls(props: Props) {
         step={0.01}
         value={props.hardness}
         onChange={props.onHardnessChange}
+      />
+      <Slider
+        label="Fluidez"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.fluidez}
+        onChange={props.onFluidezChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>

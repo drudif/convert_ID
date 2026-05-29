@@ -43,7 +43,7 @@ function drawBlob(
 }
 
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
-  const { width, height, palette, composition, grain, blur } = params;
+  const { width, height, palette, composition, grain, blur, fluidez } = params;
   target.width = width;
   target.height = height;
 
@@ -68,8 +68,12 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   // 3. Blit offscreen onto target with one blur pass
   const minDim = Math.min(width, height);
   const scaledBlur = blur * (minDim / 1080);
+  const contrastFactor = 1 + fluidez * 24;
+  const filterParts: string[] = [];
+  if (scaledBlur > 0) filterParts.push(`blur(${scaledBlur}px)`);
+  if (fluidez > 0) filterParts.push(`contrast(${contrastFactor})`);
   targetCtx.save();
-  targetCtx.filter = scaledBlur > 0 ? `blur(${scaledBlur}px)` : 'none';
+  targetCtx.filter = filterParts.length > 0 ? filterParts.join(' ') : 'none';
   targetCtx.drawImage(offscreen, 0, 0);
   targetCtx.restore();
 

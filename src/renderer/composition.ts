@@ -3,10 +3,10 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
-const MINIS_PER_CLUSTER = 4;
-const JITTER_FACTOR = 0.6;
+const MINIS_PER_CLUSTER = 8;
+const JITTER_FACTOR = 1.0;
 const MINI_RADIUS_MIN_FACTOR = 0.5;
-const MINI_RADIUS_VARIATION = 0.3;
+const MINI_RADIUS_VARIATION = 0.6;
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);

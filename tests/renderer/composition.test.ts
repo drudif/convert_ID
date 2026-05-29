@@ -62,25 +62,25 @@ describe('generateComposition', () => {
     expect(comp.blobs).toHaveLength(3);
   });
 
-  it('irregularity>0 produces blobCount * 4 blobs', () => {
+  it('irregularity>0 produces blobCount * 8 blobs', () => {
     const comp = generateComposition(5, 3, nightfall, 0.5);
-    expect(comp.blobs).toHaveLength(12);
+    expect(comp.blobs).toHaveLength(24);
   });
 
   it('irregularity>0 clusters mini-blobs near a center', () => {
-    // For each logical blob (group of 4 mini-blobs), at least 2 minis
-    // should be within 0.4 normalized distance of each other.
+    // For each logical blob (group of 8 mini-blobs), at least 2 minis
+    // should be within 0.7 normalized distance of each other.
     const comp = generateComposition(7, 2, nightfall, 0.5);
-    expect(comp.blobs).toHaveLength(8);
+    expect(comp.blobs).toHaveLength(16);
     for (let g = 0; g < 2; g++) {
-      const group = comp.blobs.slice(g * 4, g * 4 + 4);
+      const group = comp.blobs.slice(g * 8, g * 8 + 8);
       let closePairs = 0;
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
           const dx = group[i].x - group[j].x;
           const dy = group[i].y - group[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 0.4) closePairs++;
+          if (dist < 0.7) closePairs++;
         }
       }
       expect(closePairs).toBeGreaterThanOrEqual(1);

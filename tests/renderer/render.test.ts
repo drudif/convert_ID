@@ -16,6 +16,7 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     blur: 60,
     hardness: 0,
     irregularity: 0,
+    fluidez: 0,
     ...overrides,
   };
 }
