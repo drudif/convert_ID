@@ -45,23 +45,22 @@ function drawBlob(
 function drawBlobMask(
   ctx: CanvasRenderingContext2D,
   blob: CompositionBlob,
-  variant: BlobStops,
   width: number,
   height: number,
-  hardness: number,
 ): void {
+  // Solid opaque disc. Strong alpha field — when 'lighter' accumulates these
+  // and blur+contrast threshold them, nearby discs merge into a metaball
+  // silhouette. Using gradient stops here would weaken the field too much
+  // for bridges to form between adjacent blobs.
   const minDim = Math.min(width, height);
   const cx = blob.x * width;
   const cy = blob.y * height;
   const r = blob.radius * minDim;
 
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  const transformedStops = applyHardness(variant.stops, hardness);
-  for (const stop of transformedStops) {
-    grad.addColorStop(stop.offset, `rgba(255, 255, 255, ${stop.alpha})`);
-  }
-  ctx.fillStyle = grad;
-  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
@@ -85,22 +84,25 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     drawBlob(colorCtx, blob, variant, width, height, params.hardness);
   }
 
-  // 3. Mask layer — white-on-alpha blobs with 'lighter' so alphas truly add up.
-  // This accumulated alpha field is what blur+contrast turns into a metaball silhouette.
+  // 3. Mask layer — solid white discs with 'lighter' so alpha fields truly add up.
+  // This is the metaball scalar field that blur+contrast turns into a silhouette.
   const maskLayer = document.createElement('canvas');
   maskLayer.width = width;
   maskLayer.height = height;
   const maskCtx = maskLayer.getContext('2d')!;
   maskCtx.globalCompositeOperation = 'lighter';
   for (const blob of composition.blobs) {
-    const variant = palette.blobVariants[blob.variantIdx];
-    drawBlobMask(maskCtx, blob, variant, width, height, params.hardness);
+    drawBlobMask(maskCtx, blob, width, height);
   }
 
   // 4. Compose blurred colors clipped by the metaball mask.
+  // The mask uses an amplified blur (vs the color blur) so adjacent discs'
+  // alpha fields bridge into each other — the "oil drops merging" effect.
+  // Contrast is kept moderate (max 15, not binary 25) for soft, fluid edges.
   const minDim = Math.min(width, height);
   const scaledBlur = blur * (minDim / 1080);
-  const contrastFactor = 1 + fluidez * 24;
+  const maskBlurPx = Math.max(scaledBlur, minDim * 0.04) * 1.6;
+  const contrastFactor = 1 + fluidez * 14;
 
   const scratch = document.createElement('canvas');
   scratch.width = width;
@@ -111,14 +113,10 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   scratchCtx.filter = scaledBlur > 0 ? `blur(${scaledBlur}px)` : 'none';
   scratchCtx.drawImage(colorLayer, 0, 0);
 
-  // 4b: clip to metaball silhouette (blur+contrast on accumulated alpha mask).
-  // destination-in keeps only pixels where the source has non-zero alpha; the source's
-  // RGB is ignored, so contrast distortion never reaches the visible colors.
+  // 4b: clip to metaball silhouette (blur+contrast on the accumulated alpha field).
+  // destination-in only reads the source alpha, so contrast never touches the colors.
   if (fluidez > 0) {
-    const maskFilter = scaledBlur > 0
-      ? `blur(${scaledBlur}px) contrast(${contrastFactor})`
-      : `contrast(${contrastFactor})`;
-    scratchCtx.filter = maskFilter;
+    scratchCtx.filter = `blur(${maskBlurPx}px) contrast(${contrastFactor})`;
     scratchCtx.globalCompositeOperation = 'destination-in';
     scratchCtx.drawImage(maskLayer, 0, 0);
     scratchCtx.globalCompositeOperation = 'source-over';
