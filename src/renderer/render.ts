@@ -179,7 +179,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const edgeBand = Math.max(0.02, threshold * 0.08);
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
-  const outlineGain = irregularity * 0.55; // ±55% radius variation at max
+  const outlineGain = irregularity * 0.7; // strong lobes at max irregularity
 
   // 5. Per-pixel evaluation.
   const img = targetCtx.getImageData(0, 0, width, height);

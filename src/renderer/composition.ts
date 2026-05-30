@@ -32,15 +32,22 @@ export function generateComposition(
     const baseR = RADIUS_MIN + rng() * (RADIUS_MAX - RADIUS_MIN);
     const variantIdx = weightedPick(rng, weights);
 
-    // Five angular harmonics define this blob's fixed organic outline.
-    // The render pipeline multiplies the per-pixel perturbation by the
-    // runtime irregularity value, so the slider smoothly takes the same
-    // blob from a perfect circle to its full distorted silhouette without
-    // changing topology (still one connected metaball, one heat centre).
+    // Pick ONE dominant harmonic per blob (gives the silhouette a definite
+    // lobe count — 3 = triangle, 5 = starfish, 6 = flower, etc). The other
+    // harmonics get small random amps so the lobes aren't perfectly
+    // symmetric. Without a dominant, summing 5 mid-amp sines just smooths
+    // out to a soft wavy ellipse.
+    const dominantIdx = Math.floor(rng() * HARMONIC_COUNT);
     const amps: number[] = [];
     const phases: number[] = [];
     for (let h = 0; h < HARMONIC_COUNT; h++) {
-      amps.push(rng() * 2 - 1);
+      const sign = rng() > 0.5 ? 1 : -1;
+      const mag = rng();
+      if (h === dominantIdx) {
+        amps.push(sign * (0.7 + mag * 0.3));   // |amp| in [0.7, 1.0]
+      } else {
+        amps.push(sign * mag * 0.3);            // |amp| in [0, 0.3]
+      }
       phases.push(rng() * TWO_PI);
     }
     const harmonics = { amps, phases };
