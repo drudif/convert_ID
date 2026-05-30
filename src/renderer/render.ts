@@ -108,15 +108,30 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 // Precompute a per-blob outline lookup table indexed by angle, so the
-// per-pixel hot loop only does a lookup + linear interp (no sin calls).
+// per-pixel hot loop only does an array lookup (no sin calls).
+// Frequencies start at k=3 — k=2 is intentionally skipped because it
+// produces an ellipse, not an organic blot. Five harmonics layered
+// together give the irregular "ink on paper" silhouette.
+const HARMONIC_K_OFFSET = 3;
+
 function buildOutlineLut(amps: number[], phases: number[]): Float32Array {
   const lut = new Float32Array(ANGLE_LUT_SIZE);
+  const N = amps.length;
+  let maxAbs = 0;
   for (let i = 0; i < ANGLE_LUT_SIZE; i++) {
     const angle = (i / ANGLE_LUT_SIZE) * TWO_PI;
-    lut[i] =
-      amps[0] * Math.sin(2 * angle + phases[0]) +
-      amps[1] * Math.sin(3 * angle + phases[1]) +
-      amps[2] * Math.sin(4 * angle + phases[2]);
+    let sum = 0;
+    for (let k = 0; k < N; k++) {
+      sum += amps[k] * Math.sin((HARMONIC_K_OFFSET + k) * angle + phases[k]);
+    }
+    lut[i] = sum;
+    const abs = sum < 0 ? -sum : sum;
+    if (abs > maxAbs) maxAbs = abs;
+  }
+  // Normalise so every blob has the same max perturbation amplitude at a
+  // given irregularity slider value — consistent behaviour across seeds.
+  if (maxAbs > 0) {
+    for (let i = 0; i < ANGLE_LUT_SIZE; i++) lut[i] /= maxAbs;
   }
   return lut;
 }
@@ -164,7 +179,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const edgeBand = Math.max(0.02, threshold * 0.08);
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
-  const outlineGain = irregularity * 0.45; // cap to avoid degenerate r→0
+  const outlineGain = irregularity * 0.55; // ±55% radius variation at max
 
   // 5. Per-pixel evaluation.
   const img = targetCtx.getImageData(0, 0, width, height);

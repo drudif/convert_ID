@@ -57,11 +57,11 @@ describe('generateComposition', () => {
     expect(ratio0).toBeLessThan(0.8);
   });
 
-  it('each blob carries three outline harmonics (amps in [-1,1], phases in [0, 2π])', () => {
+  it('each blob carries five outline harmonics (amps in [-1,1], phases in [0, 2π])', () => {
     const comp = generateComposition(11, 4, nightfall);
     for (const b of comp.blobs) {
-      expect(b.harmonics.amps).toHaveLength(3);
-      expect(b.harmonics.phases).toHaveLength(3);
+      expect(b.harmonics.amps).toHaveLength(5);
+      expect(b.harmonics.phases).toHaveLength(5);
       for (const a of b.harmonics.amps) {
         expect(a).toBeGreaterThanOrEqual(-1);
         expect(a).toBeLessThanOrEqual(1);

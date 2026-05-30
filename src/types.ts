@@ -17,10 +17,12 @@ export type Palette = {
 };
 
 export type BlobHarmonics = {
-  // Outline distortion: r(θ) = baseR * (1 + irregularity · Σ amps[k]·sin((k+2)·θ + phases[k]))
-  // Three harmonics (k=2,3,4 modes) give organic non-circular silhouettes.
-  amps: [number, number, number];   // each in [-1, 1]
-  phases: [number, number, number]; // each in [0, 2π]
+  // Outline distortion: r(θ) = baseR * (1 + irregularity · Σ amps[k]·sin(K[k]·θ + phases[k]))
+  // K[k] starts at 3 (k=2 is intentionally skipped — it produces ellipses,
+  // not organic blots). Multiple high-frequency harmonics layered together
+  // give the irregular "ink-blot" silhouette.
+  amps: number[];   // each in [-1, 1]
+  phases: number[]; // each in [0, 2π]
 };
 
 export type CompositionBlob = {

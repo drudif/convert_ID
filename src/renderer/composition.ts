@@ -4,6 +4,7 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
 const TWO_PI = Math.PI * 2;
+const HARMONIC_COUNT = 5; // k = 3..7; k=2 deliberately skipped (it's an ellipse)
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);
@@ -31,23 +32,18 @@ export function generateComposition(
     const baseR = RADIUS_MIN + rng() * (RADIUS_MAX - RADIUS_MIN);
     const variantIdx = weightedPick(rng, weights);
 
-    // Three angular harmonics define a fixed organic outline signature for
-    // this blob. The render pipeline multiplies the per-pixel perturbation
-    // by the runtime irregularity value, so the slider smoothly takes the
-    // same blob from a perfect circle to its full distorted silhouette
-    // without changing topology (still one connected metaball).
-    const harmonics = {
-      amps: [
-        rng() * 2 - 1,
-        rng() * 2 - 1,
-        rng() * 2 - 1,
-      ] as [number, number, number],
-      phases: [
-        rng() * TWO_PI,
-        rng() * TWO_PI,
-        rng() * TWO_PI,
-      ] as [number, number, number],
-    };
+    // Five angular harmonics define this blob's fixed organic outline.
+    // The render pipeline multiplies the per-pixel perturbation by the
+    // runtime irregularity value, so the slider smoothly takes the same
+    // blob from a perfect circle to its full distorted silhouette without
+    // changing topology (still one connected metaball, one heat centre).
+    const amps: number[] = [];
+    const phases: number[] = [];
+    for (let h = 0; h < HARMONIC_COUNT; h++) {
+      amps.push(rng() * 2 - 1);
+      phases.push(rng() * TWO_PI);
+    }
+    const harmonics = { amps, phases };
 
     blobs.push({ x: cx, y: cy, radius: baseR, variantIdx, harmonics });
   }
