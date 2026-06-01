@@ -10,13 +10,19 @@ const MINI_OFFSET_SCALE = 0.65;                   // mini cluster spread at irre
 // minis per blob and multi-blob compositions, totalField reaches ~5–8 at
 // dense cluster cores, ~0.3–1 in cluster outskirts. These bounds give the
 // size sliders a useful spatial range.
-const FIELD_THR_MAX = 4.5;   // size=0 → very small ring
+const FIELD_THR_MAX = 4.5;   // default size=0 → ring barely shows
 const FIELD_THR_MIN = 0.06;  // size=1 → ring covers most of the canvas
 
-function sizeToThreshold(size: number): number {
-  // Log-ish mapping: small slider changes near 0 produce big size changes
-  // (small thresholds compress the bottom of the range visually).
-  return FIELD_THR_MIN * Math.pow(FIELD_THR_MAX / FIELD_THR_MIN, 1 - size);
+// Rings 0 and 1 use a higher threshold ceiling so that at slider=0 they can
+// shrink to near-invisible — useful for tight hot cores and thin inner rings.
+const FIELD_THR_MAX_R0 = 12;
+const FIELD_THR_MAX_R1 = 7;
+
+function sizeToThreshold(size: number, thrMax: number = FIELD_THR_MAX): number {
+  // Log mapping: equal slider steps correspond to equal multiplicative
+  // changes in threshold (and thus exponential changes in spatial extent
+  // near the small end).
+  return FIELD_THR_MIN * Math.pow(thrMax / FIELD_THR_MIN, 1 - size);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -72,9 +78,10 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const eff0 = Math.min(ring0Weight, eff1);
 
   // 3. Per-ring field thresholds (size → outer threshold of that ring).
-  //    Higher size = lower threshold = bigger spatial coverage.
-  const thr0 = sizeToThreshold(eff0);
-  const thr1 = sizeToThreshold(eff1);
+  //    Higher size = lower threshold = bigger spatial coverage. Rings 0 and 1
+  //    use a steeper mapping so they can shrink to near-invisible at slider=0.
+  const thr0 = sizeToThreshold(eff0, FIELD_THR_MAX_R0);
+  const thr1 = sizeToThreshold(eff1, FIELD_THR_MAX_R1);
   const thr2 = sizeToThreshold(eff2);
   const thr3 = sizeToThreshold(eff3);
   const thr4 = sizeToThreshold(eff4);
