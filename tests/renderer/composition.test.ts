@@ -57,24 +57,22 @@ describe('generateComposition', () => {
     expect(ratio0).toBeLessThan(0.8);
   });
 
-  it('each blob carries 3 subcenters with valid offsets and radius factors', () => {
+  it('each blob carries 8 minis with valid offsets', () => {
     const comp = generateComposition(11, 4, nightfall);
     for (const b of comp.blobs) {
-      expect(b.harmonics.subcenters).toHaveLength(3);
-      for (const sub of b.harmonics.subcenters) {
-        expect(sub.ox).toBeGreaterThanOrEqual(-1);
-        expect(sub.ox).toBeLessThanOrEqual(1);
-        expect(sub.oy).toBeGreaterThanOrEqual(-1);
-        expect(sub.oy).toBeLessThanOrEqual(1);
-        expect(sub.rf).toBeGreaterThanOrEqual(0.7);
-        expect(sub.rf).toBeLessThanOrEqual(0.95);
+      expect(b.harmonics.minis).toHaveLength(8);
+      for (const m of b.harmonics.minis) {
+        expect(m.ox).toBeGreaterThanOrEqual(-1);
+        expect(m.ox).toBeLessThanOrEqual(1);
+        expect(m.oy).toBeGreaterThanOrEqual(-1);
+        expect(m.oy).toBeLessThanOrEqual(1);
       }
     }
   });
 
-  it('different seeds produce different subcenters', () => {
+  it('different seeds produce different mini offsets', () => {
     const a = generateComposition(1, 1, nightfall);
     const b = generateComposition(2, 1, nightfall);
-    expect(a.blobs[0].harmonics.subcenters).not.toEqual(b.blobs[0].harmonics.subcenters);
+    expect(a.blobs[0].harmonics.minis).not.toEqual(b.blobs[0].harmonics.minis);
   });
 });

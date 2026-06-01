@@ -1,9 +1,11 @@
 import { applyGrain } from './grain';
 import type { GradientStop, RenderParams } from '../types';
 
-const SUBCENTER_OFFSET_SCALE = 0.4; // max satellite offset = 0.4 · baseR · irregularity —
-                                    // tight enough that the Centro corridor between primary
-                                    // and satellite is wider than any single peak
+const MINI_COUNT = 8;
+const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
+                                                  // produce the same field as 1 primary R
+const MINI_OFFSET_SCALE = 0.4;                    // tight cloud — guarantees connection
+                                                  // and a single visible heat peak
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
@@ -134,32 +136,27 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   );
   const lut = buildLut(weightedStops, bg);
 
-  // 3. Pre-compute per-blob field params + flattened subcenter coords (in px).
-  // Subcenter offsets and radii both scale with irregularity, so at
-  // irregularity=0 the satellites have zero radius (no contribution) and the
-  // blob is exactly a circle. As irregularity rises, satellites grow into
-  // existence and pull the silhouette outward in their offset directions.
+  // 3. Pre-compute per-blob field params. Each blob is N identical "mini"
+  // sources; at irregularity=0 they all sit at the blob centre and their
+  // combined field equals one R-radius blob. As irregularity rises the
+  // minis drift apart within MINI_OFFSET_SCALE·baseR — same total field
+  // mass, asymmetric distribution → wavy silhouette but one warm centroid.
   const minDim = Math.min(width, height);
-  const offsetScale = SUBCENTER_OFFSET_SCALE * irregularity;
+  const offsetScale = MINI_OFFSET_SCALE * irregularity;
   const blobs = composition.blobs.map((b) => {
     const r = b.radius * minDim;
-    const subs: { cx: number; cy: number; rSq: number }[] = [];
-    if (irregularity > 0) {
-      for (const sub of b.harmonics.subcenters) {
-        const subR = r * sub.rf * irregularity;
-        subs.push({
-          cx: b.x * width + sub.ox * r * offsetScale,
-          cy: b.y * height + sub.oy * r * offsetScale,
-          rSq: subR * subR,
-        });
-      }
+    const miniR = r * MINI_R_SCALE;
+    const miniRSq = miniR * miniR;
+    const cx = b.x * width;
+    const cy = b.y * height;
+    const minis: { cx: number; cy: number }[] = [];
+    for (const m of b.harmonics.minis) {
+      minis.push({
+        cx: cx + m.ox * r * offsetScale,
+        cy: cy + m.oy * r * offsetScale,
+      });
     }
-    return {
-      cx: b.x * width,
-      cy: b.y * height,
-      rSq: r * r,
-      subs,
-    };
+    return { miniRSq, minis };
   });
 
   // 4. Heat-map field mapping (equal-area, γ=1). Fluidez lowers threshold to
@@ -180,16 +177,12 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       let totalField = 0;
       for (let i = 0; i < nBlobs; i++) {
         const b = blobs[i];
-        // Primary contribution
-        const dx = x - b.cx;
-        const dy = y - b.cy;
-        totalField += b.rSq / (dx * dx + dy * dy + EPS);
-        // Satellite contributions add bulges in their offset directions
-        for (let s = 0; s < b.subs.length; s++) {
-          const sub = b.subs[s];
-          const sdx = x - sub.cx;
-          const sdy = y - sub.cy;
-          totalField += sub.rSq / (sdx * sdx + sdy * sdy + EPS);
+        const miniRSq = b.miniRSq;
+        for (let m = 0; m < b.minis.length; m++) {
+          const mini = b.minis[m];
+          const dx = x - mini.cx;
+          const dy = y - mini.cy;
+          totalField += miniRSq / (dx * dx + dy * dy + EPS);
         }
       }
 

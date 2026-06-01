@@ -3,10 +3,9 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
-const SUBCENTER_COUNT = 3;        // satellites per blob
-const SUBCENTER_R_MIN = 0.7;
-const SUBCENTER_R_RANGE = 0.25;   // rf ∈ [0.7, 0.95] — satellite almost as big as primary
-                                  // so its Centro region always overlaps the primary's
+const MINI_COUNT = 8; // identical field sources per blob — the cluster's centroid is
+                      // the only visible peak even when they spread out at high
+                      // irregularity, so no fragment can read as a separate hot dot
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);
@@ -34,18 +33,18 @@ export function generateComposition(
     const baseR = RADIUS_MIN + rng() * (RADIUS_MAX - RADIUS_MIN);
     const variantIdx = weightedPick(rng, weights);
 
-    // Three off-centre satellites positioned within ~0.7·baseR of the primary.
-    // Their metaball fields add to the primary's, producing bulges in their
-    // directions — non-radial protrusions, asymmetric organic silhouettes.
-    const subcenters = [];
-    for (let s = 0; s < SUBCENTER_COUNT; s++) {
-      subcenters.push({
+    // Eight identical mini sources that stack at the blob centre when
+    // irregularity=0 (field equivalent to one primary R), then drift apart
+    // within a tight cloud as irregularity rises. Same radius across all
+    // minis means no dominant peak — the cluster reads as one unified blob.
+    const minis = [];
+    for (let i = 0; i < MINI_COUNT; i++) {
+      minis.push({
         ox: rng() * 2 - 1,
         oy: rng() * 2 - 1,
-        rf: SUBCENTER_R_MIN + rng() * SUBCENTER_R_RANGE,
       });
     }
-    const harmonics = { subcenters };
+    const harmonics = { minis };
 
     blobs.push({ x: cx, y: cy, radius: baseR, variantIdx, harmonics });
   }

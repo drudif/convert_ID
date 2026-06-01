@@ -16,19 +16,19 @@ export type Palette = {
   variantWeights?: number[];   // optional; parallel to blobVariants; uniform if omitted
 };
 
-export type BlobSubcenter = {
-  ox: number; // offset x in [-1, 1]; renderer scales by baseR · irregularity
-  oy: number; // offset y in [-1, 1]
-  rf: number; // radius factor in [0.4, 0.7]; renderer scales by irregularity
+export type BlobMini = {
+  ox: number; // offset x in [-1, 1]; renderer scales by baseR · spread · irregularity
+  oy: number;
 };
 
 export type BlobHarmonics = {
-  // Off-centre satellites that contribute to the metaball field alongside
-  // the primary centre. Any r(θ)-based distortion is inherently radial
-  // (spikes always point outward from one centre); using multiple field
-  // sources puts the bulges wherever the satellites are placed — organic
-  // ink-blot silhouettes instead of stars / flowers.
-  subcenters: BlobSubcenter[];
+  // N identical "mini" field sources per blob. At irregularity=0 they all
+  // stack at the blob centre and produce a field equivalent to a single
+  // radius-R primary; as irregularity grows they spread within a tight
+  // cloud, giving an asymmetric silhouette. Crucially they have IDENTICAL
+  // radii (no dominant primary), so the heat map sees one unified peak at
+  // the cluster's centroid instead of N distinct peaks.
+  minis: BlobMini[];
 };
 
 export type CompositionBlob = {
