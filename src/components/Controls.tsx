@@ -18,12 +18,14 @@ type Props = {
   blobCount: number;
   irregularity: number;
   grain: number;
-  centroWeight: number;
-  centroFluidez: number;
-  anel1Weight: number;
-  anel1Fluidez: number;
-  anel2Weight: number;
-  anel2Fluidez: number;
+  ring1Weight: number;
+  ring1Fluidez: number;
+  ring2Weight: number;
+  ring2Fluidez: number;
+  ring3Weight: number;
+  ring3Fluidez: number;
+  ring4Weight: number;
+  ring4Fluidez: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
@@ -31,17 +33,19 @@ type Props = {
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
-  onCentroWeightChange: (w: number) => void;
-  onCentroFluidezChange: (f: number) => void;
-  onAnel1WeightChange: (w: number) => void;
-  onAnel1FluidezChange: (f: number) => void;
-  onAnel2WeightChange: (w: number) => void;
-  onAnel2FluidezChange: (f: number) => void;
+  onRing1WeightChange: (w: number) => void;
+  onRing1FluidezChange: (f: number) => void;
+  onRing2WeightChange: (w: number) => void;
+  onRing2FluidezChange: (f: number) => void;
+  onRing3WeightChange: (w: number) => void;
+  onRing3FluidezChange: (f: number) => void;
+  onRing4WeightChange: (w: number) => void;
+  onRing4FluidezChange: (f: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
 
-const CUSTOM_SLOT_LABELS = ['Fundo', 'Centro', 'Anel 1', 'Anel 2', 'Borda'];
+const CUSTOM_SLOT_LABELS = ['Fundo', 'º1', 'º2', 'º3', 'º4'];
 
 function clampDim(n: number): number {
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -169,52 +173,68 @@ export function Controls(props: Props) {
         onChange={props.onGrainChange}
       />
       <Slider
-        label="Centro"
+        label="º1"
         min={0}
         max={1}
         step={0.01}
-        value={props.centroWeight}
-        onChange={props.onCentroWeightChange}
+        value={props.ring1Weight}
+        onChange={props.onRing1WeightChange}
       />
       <Slider
-        label="Fluidez Centro"
+        label="Fluidez º1"
         min={0}
         max={1}
         step={0.01}
-        value={props.centroFluidez}
-        onChange={props.onCentroFluidezChange}
+        value={props.ring1Fluidez}
+        onChange={props.onRing1FluidezChange}
       />
       <Slider
-        label="Anel 1"
+        label="º2"
         min={0}
         max={1}
         step={0.01}
-        value={props.anel1Weight}
-        onChange={props.onAnel1WeightChange}
+        value={props.ring2Weight}
+        onChange={props.onRing2WeightChange}
       />
       <Slider
-        label="Fluidez Anel 1"
+        label="Fluidez º2"
         min={0}
         max={1}
         step={0.01}
-        value={props.anel1Fluidez}
-        onChange={props.onAnel1FluidezChange}
+        value={props.ring2Fluidez}
+        onChange={props.onRing2FluidezChange}
       />
       <Slider
-        label="Anel 2"
+        label="º3"
         min={0}
         max={1}
         step={0.01}
-        value={props.anel2Weight}
-        onChange={props.onAnel2WeightChange}
+        value={props.ring3Weight}
+        onChange={props.onRing3WeightChange}
       />
       <Slider
-        label="Fluidez Anel 2"
+        label="Fluidez º3"
         min={0}
         max={1}
         step={0.01}
-        value={props.anel2Fluidez}
-        onChange={props.onAnel2FluidezChange}
+        value={props.ring3Fluidez}
+        onChange={props.onRing3FluidezChange}
+      />
+      <Slider
+        label="º4"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.ring4Weight}
+        onChange={props.onRing4WeightChange}
+      />
+      <Slider
+        label="Fluidez º4"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.ring4Fluidez}
+        onChange={props.onRing4FluidezChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>

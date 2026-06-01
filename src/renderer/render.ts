@@ -45,8 +45,10 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const {
     width, height, palette, composition,
     grain, irregularity,
-    centroFluidez, anel1Fluidez, anel2Fluidez,
-    centroWeight, anel1Weight, anel2Weight,
+    ring1Weight, ring1Fluidez,
+    ring2Weight, ring2Fluidez,
+    ring3Weight, ring3Fluidez,
+    ring4Weight, ring4Fluidez,
   } = params;
   target.width = width;
   target.height = height;
@@ -57,35 +59,41 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Resolve effective sizes with nesting clamps:
-  //    centro is limited (capped) by anel1; anel1 by anel2; anel2 unconstrained.
-  //    The slider value represents desired size; the rendered ring can't be
-  //    larger than the next ring out.
-  const effA2 = anel2Weight;
-  const effA1 = Math.min(anel1Weight, effA2);
-  const effC = Math.min(centroWeight, effA1);
+  // 2. Resolve effective sizes with nesting clamps. Each inner ring is
+  //    capped at the size of the next outer ring (rendered ring 1 can't
+  //    exceed ring 2's size, etc.). Ring 4 is the silhouette extent.
+  const eff4 = ring4Weight;
+  const eff3 = Math.min(ring3Weight, eff4);
+  const eff2 = Math.min(ring2Weight, eff3);
+  const eff1 = Math.min(ring1Weight, eff2);
 
   // 3. Per-ring field thresholds (size → outer threshold of that ring).
   //    Higher size = lower threshold = bigger spatial coverage.
-  const centroThr = sizeToThreshold(effC);
-  const anel1Thr = sizeToThreshold(effA1);
-  const anel2Thr = sizeToThreshold(effA2);
+  const thr1 = sizeToThreshold(eff1);
+  const thr2 = sizeToThreshold(eff2);
+  const thr3 = sizeToThreshold(eff3);
+  const thr4 = sizeToThreshold(eff4);
 
-  // 4. Per-ring boundary blur (smoothstep band width).
-  //    The width scales with fluidez and with the threshold itself, so the
-  //    blur is meaningful at both small and large rings. A small constant
-  //    is always present so even fluidez=0 has a 1px-ish soft edge.
-  const centroBand = Math.max(0.005, centroFluidez * centroThr * 1.2);
-  const anel1Band = Math.max(0.005, anel1Fluidez * anel1Thr * 1.2);
-  const anel2Band = Math.max(0.005, anel2Fluidez * anel2Thr * 1.2);
+  // 4. Per-ring boundary blur widths (smoothstep band, scales with the
+  //    ring's threshold so the blur is meaningful at both small and large
+  //    rings). A small floor ensures even fluidez=0 has a sub-pixel soft edge.
+  const band1 = Math.max(0.005, ring1Fluidez * thr1 * 1.2);
+  const band2 = Math.max(0.005, ring2Fluidez * thr2 * 1.2);
+  const band3 = Math.max(0.005, ring3Fluidez * thr3 * 1.2);
+  const band4 = Math.max(0.005, ring4Fluidez * thr4 * 1.2);
 
-  // 5. Palette colours. Layered rendering: bg → Anel 2 → Anel 1 → Centro.
-  //    Stops 0..2 are the visible ring colours; stop 3 (Borda) is unused
-  //    in this model.
+  // 5. Palette colours. Four stops map to four rings (º1 innermost → º4
+  //    outermost). If the 4th stop has alpha < 0.05 it's a "fade marker"
+  //    (preset palette convention) — in that case ring 4 uses the bg
+  //    colour, so the layer becomes invisible but still controls silhouette
+  //    extent via ring4 sliders.
   const variant = palette.blobVariants[0];
-  const cColor = hexToRgb(variant.stops[0].color);
-  const a1Color = hexToRgb(variant.stops[1].color);
-  const a2Color = hexToRgb(variant.stops[2].color);
+  const c1 = hexToRgb(variant.stops[0].color);
+  const c2 = hexToRgb(variant.stops[1].color);
+  const c3 = hexToRgb(variant.stops[2].color);
+  const c4 = variant.stops[3].alpha < 0.05
+    ? bg
+    : hexToRgb(variant.stops[3].color);
 
   // 6. Pre-compute per-blob field params.
   const minDim = Math.min(width, height);
@@ -129,23 +137,27 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
         }
       }
 
-      // Anel 2 presence is also the silhouette alpha.
-      const a2b = smoothstep(anel2Thr - anel2Band, anel2Thr + anel2Band, totalField);
-      if (a2b <= 0) continue;
+      // Ring 4 presence is also the silhouette alpha (outermost ring).
+      const b4 = smoothstep(thr4 - band4, thr4 + band4, totalField);
+      if (b4 <= 0) continue;
 
-      const a1b = smoothstep(anel1Thr - anel1Band, anel1Thr + anel1Band, totalField);
-      const cb = smoothstep(centroThr - centroBand, centroThr + centroBand, totalField);
+      const b3 = smoothstep(thr3 - band3, thr3 + band3, totalField);
+      const b2 = smoothstep(thr2 - band2, thr2 + band2, totalField);
+      const b1 = smoothstep(thr1 - band1, thr1 + band1, totalField);
 
-      // Layered blend: bg → Anel 2 → Anel 1 → Centro
-      let r = bg.r * (1 - a2b) + a2Color.r * a2b;
-      let g = bg.g * (1 - a2b) + a2Color.g * a2b;
-      let bl = bg.b * (1 - a2b) + a2Color.b * a2b;
-      r = r * (1 - a1b) + a1Color.r * a1b;
-      g = g * (1 - a1b) + a1Color.g * a1b;
-      bl = bl * (1 - a1b) + a1Color.b * a1b;
-      r = r * (1 - cb) + cColor.r * cb;
-      g = g * (1 - cb) + cColor.g * cb;
-      bl = bl * (1 - cb) + cColor.b * cb;
+      // Layered blend: bg → º4 → º3 → º2 → º1 (innermost wins on top)
+      let r = bg.r * (1 - b4) + c4.r * b4;
+      let g = bg.g * (1 - b4) + c4.g * b4;
+      let bl = bg.b * (1 - b4) + c4.b * b4;
+      r = r * (1 - b3) + c3.r * b3;
+      g = g * (1 - b3) + c3.g * b3;
+      bl = bl * (1 - b3) + c3.b * b3;
+      r = r * (1 - b2) + c2.r * b2;
+      g = g * (1 - b2) + c2.g * b2;
+      bl = bl * (1 - b2) + c2.b * b2;
+      r = r * (1 - b1) + c1.r * b1;
+      g = g * (1 - b1) + c1.g * b1;
+      bl = bl * (1 - b1) + c1.b * b1;
 
       const idx = (y * width + x) << 2;
       data[idx]     = r;

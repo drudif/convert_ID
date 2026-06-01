@@ -16,15 +16,17 @@ export default function App() {
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
-  // Centro / Anel 1 / Anel 2 sliders now represent SIZE (each one is the
-  // outer extent of its ring in canvas space). Nesting is enforced at
-  // render time — centro is clamped to anel 1's size, anel 1 to anel 2's.
-  const [centroWeight, setCentroWeight] = useState(0.20);
-  const [centroFluidez, setCentroFluidez] = useState(0.25);
-  const [anel1Weight, setAnel1Weight] = useState(0.45);
-  const [anel1Fluidez, setAnel1Fluidez] = useState(0.25);
-  const [anel2Weight, setAnel2Weight] = useState(0.70);
-  const [anel2Fluidez, setAnel2Fluidez] = useState(0.25);
+  // Four nested rings (º1 innermost → º4 outermost / silhouette). Each ring
+  // has SIZE (outer extent) and FLUIDEZ (boundary blur). Nesting is enforced
+  // at render time — each inner ring is clamped to the next outer one.
+  const [ring1Weight, setRing1Weight] = useState(0.15);
+  const [ring1Fluidez, setRing1Fluidez] = useState(0.25);
+  const [ring2Weight, setRing2Weight] = useState(0.35);
+  const [ring2Fluidez, setRing2Fluidez] = useState(0.25);
+  const [ring3Weight, setRing3Weight] = useState(0.55);
+  const [ring3Fluidez, setRing3Fluidez] = useState(0.25);
+  const [ring4Weight, setRing4Weight] = useState(0.80);
+  const [ring4Fluidez, setRing4Fluidez] = useState(0.25);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -45,12 +47,10 @@ export default function App() {
     composition,
     grain,
     irregularity,
-    centroFluidez,
-    anel1Fluidez,
-    anel2Fluidez,
-    centroWeight,
-    anel1Weight,
-    anel2Weight,
+    ring1Weight, ring1Fluidez,
+    ring2Weight, ring2Fluidez,
+    ring3Weight, ring3Fluidez,
+    ring4Weight, ring4Fluidez,
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
@@ -83,12 +83,14 @@ export default function App() {
         blobCount={blobCount}
         irregularity={irregularity}
         grain={grain}
-        centroWeight={centroWeight}
-        centroFluidez={centroFluidez}
-        anel1Weight={anel1Weight}
-        anel1Fluidez={anel1Fluidez}
-        anel2Weight={anel2Weight}
-        anel2Fluidez={anel2Fluidez}
+        ring1Weight={ring1Weight}
+        ring1Fluidez={ring1Fluidez}
+        ring2Weight={ring2Weight}
+        ring2Fluidez={ring2Fluidez}
+        ring3Weight={ring3Weight}
+        ring3Fluidez={ring3Fluidez}
+        ring4Weight={ring4Weight}
+        ring4Fluidez={ring4Fluidez}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -96,12 +98,14 @@ export default function App() {
         onBlobCountChange={setBlobCount}
         onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
-        onCentroWeightChange={setCentroWeight}
-        onCentroFluidezChange={setCentroFluidez}
-        onAnel1WeightChange={setAnel1Weight}
-        onAnel1FluidezChange={setAnel1Fluidez}
-        onAnel2WeightChange={setAnel2Weight}
-        onAnel2FluidezChange={setAnel2Fluidez}
+        onRing1WeightChange={setRing1Weight}
+        onRing1FluidezChange={setRing1Fluidez}
+        onRing2WeightChange={setRing2Weight}
+        onRing2FluidezChange={setRing2Fluidez}
+        onRing3WeightChange={setRing3Weight}
+        onRing3FluidezChange={setRing3Fluidez}
+        onRing4WeightChange={setRing4Weight}
+        onRing4FluidezChange={setRing4Fluidez}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

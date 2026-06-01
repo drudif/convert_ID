@@ -51,14 +51,16 @@ export type RenderParams = {
   composition: Composition;
   grain: number;          // 0–1
   irregularity: number;   // 0–1; mini-cluster spread amplitude
-  // Per-ring spatial fluidez — each controls the OUTER field threshold for
-  // its own ring. Higher = lower threshold = ring covers more canvas area.
-  centroFluidez: number;  // 0–1
-  anel1Fluidez: number;   // 0–1
-  anel2Fluidez: number;   // 0–1; also defines silhouette boundary
-  // Per-ring weights — normalised proportions only. Define LUT slot widths
-  // for colour blending; do NOT affect spatial extent (that's per-ring fluidez).
-  centroWeight: number;
-  anel1Weight: number;
-  anel2Weight: number;
+  // Four nested rings (º1 innermost → º4 outermost / silhouette edge).
+  // Each ring has a SIZE (spatial extent) and a FLUIDEZ (boundary blur).
+  // Nesting is enforced at render time: each inner ring is clamped to the
+  // size of the next outer one.
+  ring1Weight: number;
+  ring1Fluidez: number;
+  ring2Weight: number;
+  ring2Fluidez: number;
+  ring3Weight: number;
+  ring3Fluidez: number;
+  ring4Weight: number;
+  ring4Fluidez: number;
 };
