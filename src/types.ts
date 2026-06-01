@@ -49,11 +49,16 @@ export type RenderParams = {
   height: number;
   palette: Palette;
   composition: Composition;
-  grain: number;        // 0–1
-  blur: number;         // "1080p-equivalent" px; scaled at render time
-  irregularity: number; // 0–1; amplitude of the per-blob outline distortion
-  fluidez: number;      // 0–1; lowers the metaball threshold (wider silhouette)
-  centroWeight: number; // 0–1; share of the LUT used by Centro→Anel 1
-  anel1Weight: number;  // 0–1; share used by Anel 1→Anel 2
-  anel2Weight: number;  // 0–1; share used by Anel 2→Borda; sum is clamped to 1
+  grain: number;          // 0–1
+  irregularity: number;   // 0–1; mini-cluster spread amplitude
+  // Per-ring spatial fluidez — each controls the OUTER field threshold for
+  // its own ring. Higher = lower threshold = ring covers more canvas area.
+  centroFluidez: number;  // 0–1
+  anel1Fluidez: number;   // 0–1
+  anel2Fluidez: number;   // 0–1; also defines silhouette boundary
+  // Per-ring weights — normalised proportions only. Define LUT slot widths
+  // for colour blending; do NOT affect spatial extent (that's per-ring fluidez).
+  centroWeight: number;
+  anel1Weight: number;
+  anel2Weight: number;
 };

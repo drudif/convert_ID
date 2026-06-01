@@ -16,11 +16,12 @@ export default function App() {
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
-  const [blur, setBlur] = useState(120);
-  const [fluidez, setFluidez] = useState(0.3);
   const [centroWeight, setCentroWeight] = useState(0.20);
+  const [centroFluidez, setCentroFluidez] = useState(0.45);
   const [anel1Weight, setAnel1Weight] = useState(0.35);
+  const [anel1Fluidez, setAnel1Fluidez] = useState(0.5);
   const [anel2Weight, setAnel2Weight] = useState(0.45);
+  const [anel2Fluidez, setAnel2Fluidez] = useState(0.55);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -40,9 +41,10 @@ export default function App() {
     palette,
     composition,
     grain,
-    blur,
     irregularity,
-    fluidez,
+    centroFluidez,
+    anel1Fluidez,
+    anel2Fluidez,
     centroWeight,
     anel1Weight,
     anel2Weight,
@@ -78,11 +80,12 @@ export default function App() {
         blobCount={blobCount}
         irregularity={irregularity}
         grain={grain}
-        blur={blur}
-        fluidez={fluidez}
         centroWeight={centroWeight}
+        centroFluidez={centroFluidez}
         anel1Weight={anel1Weight}
+        anel1Fluidez={anel1Fluidez}
         anel2Weight={anel2Weight}
+        anel2Fluidez={anel2Fluidez}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -90,11 +93,12 @@ export default function App() {
         onBlobCountChange={setBlobCount}
         onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
-        onBlurChange={setBlur}
-        onFluidezChange={setFluidez}
         onCentroWeightChange={setCentroWeight}
+        onCentroFluidezChange={setCentroFluidez}
         onAnel1WeightChange={setAnel1Weight}
+        onAnel1FluidezChange={setAnel1Fluidez}
         onAnel2WeightChange={setAnel2Weight}
+        onAnel2FluidezChange={setAnel2Fluidez}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

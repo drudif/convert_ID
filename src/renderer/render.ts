@@ -120,7 +120,8 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const {
     width, height, palette, composition,
-    grain, blur, irregularity, fluidez,
+    grain, irregularity,
+    centroFluidez, anel1Fluidez, anel2Fluidez,
     centroWeight, anel1Weight, anel2Weight,
   } = params;
   target.width = width;
@@ -163,12 +164,24 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     return { miniRSq, minis };
   });
 
-  // 4. Heat-map field mapping (equal-area, γ=1). Fluidez lowers threshold to
-  // widen the silhouette and let neighbouring blobs merge into one metaball.
-  const threshold = 1.0 - fluidez * 0.85;
-  const edgeBand = Math.max(0.02, threshold * 0.08);
-  const edgeLo = Math.max(0.001, threshold - edgeBand);
-  const edgeHi = threshold + edgeBand;
+  // 4. Per-ring field thresholds. Each fluidez controls how far its ring
+  // extends in space — lower threshold means more canvas area covered by
+  // that colour. The Anel 1 and Anel 2 thresholds are *fractions* of the
+  // preceding ring's threshold, so the rings are always properly nested
+  // (centroThr > anel1Thr > anel2Thr) regardless of slider combinations.
+  const centroThr = Math.max(0.02, 1.0 - centroFluidez * 0.95);
+  const anel1Thr = Math.max(0.01, centroThr * (1.0 - anel1Fluidez * 0.95));
+  const anel2Thr = Math.max(0.005, anel1Thr * (1.0 - anel2Fluidez * 0.95));
+  const edgeBand = Math.max(0.005, anel2Thr * 0.15);
+  const edgeLo = Math.max(0.001, anel2Thr - edgeBand);
+  const edgeHi = anel2Thr + edgeBand;
+
+  // Normalised weights → LUT stop positions for colour blending only
+  // (no effect on spatial extent — that's per-ring fluidez's job).
+  const totalW = centroWeight + anel1Weight + anel2Weight;
+  const safeTotal = totalW > 0 ? totalW : 1;
+  const o1 = centroWeight / safeTotal;             // Centro / Anel 1 boundary
+  const o2 = (centroWeight + anel1Weight) / safeTotal; // Anel 1 / Anel 2 boundary
 
   // 5. Per-pixel evaluation. Per-mini contribution uses miniRSq as the
   // denominator smoothing instead of a tiny EPS — i.e. a Lorentzian bump
@@ -197,9 +210,26 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       const inside = smoothstep(edgeLo, edgeHi, totalField);
       if (inside <= 0) continue;
 
-      // Equal-area mapping: heatOffset = threshold / totalField.
-      let heatOffset = threshold / totalField;
+      // Field → LUT offset using per-ring thresholds.
+      // Within each ring's field range, linearly interpolate the colour
+      // toward the next ring's stop position in the LUT.
+      let heatOffset: number;
+      if (totalField >= centroThr) {
+        // Centro region: saturate toward LUT[0] as field grows beyond centroThr.
+        heatOffset = o1 * (centroThr / totalField);
+      } else if (totalField >= anel1Thr) {
+        // Centro → Anel 1 transition (offset o1 → o2 sort of — actually o1 to o2 represents Anel 1 colour band)
+        // Wait: at centroThr we're at boundary between Centro and Anel 1 → offset = o1
+        // at anel1Thr we're at boundary between Anel 1 and Anel 2 → offset = o2
+        const t = (centroThr - totalField) / (centroThr - anel1Thr);
+        heatOffset = o1 + t * (o2 - o1);
+      } else {
+        // Anel 2 region: at anel1Thr offset = o2; at anel2Thr offset = 1 (LUT edge).
+        const t = (anel1Thr - totalField) / (anel1Thr - anel2Thr);
+        heatOffset = o2 + t * (1 - o2);
+      }
       if (heatOffset > 1) heatOffset = 1;
+      else if (heatOffset < 0) heatOffset = 0;
       const lutIdx = (heatOffset * 255) | 0;
 
       const a = inside;
@@ -214,19 +244,6 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
 
   targetCtx.putImageData(img, 0, 0);
 
-  // 6. Optional post-blur.
-  const scaledBlur = blur * (minDim / 1080);
-  if (scaledBlur > 0) {
-    const blurred = document.createElement('canvas');
-    blurred.width = width;
-    blurred.height = height;
-    const blurredCtx = blurred.getContext('2d')!;
-    blurredCtx.filter = `blur(${scaledBlur}px)`;
-    blurredCtx.drawImage(target, 0, 0);
-    targetCtx.clearRect(0, 0, width, height);
-    targetCtx.drawImage(blurred, 0, 0);
-  }
-
-  // 7. Grain overlay
+  // 6. Grain overlay
   applyGrain(target, grain);
 }

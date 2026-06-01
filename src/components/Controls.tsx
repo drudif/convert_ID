@@ -18,11 +18,12 @@ type Props = {
   blobCount: number;
   irregularity: number;
   grain: number;
-  blur: number;
-  fluidez: number;
   centroWeight: number;
+  centroFluidez: number;
   anel1Weight: number;
+  anel1Fluidez: number;
   anel2Weight: number;
+  anel2Fluidez: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
@@ -30,11 +31,12 @@ type Props = {
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
-  onBlurChange: (b: number) => void;
-  onFluidezChange: (f: number) => void;
   onCentroWeightChange: (w: number) => void;
+  onCentroFluidezChange: (f: number) => void;
   onAnel1WeightChange: (w: number) => void;
+  onAnel1FluidezChange: (f: number) => void;
   onAnel2WeightChange: (w: number) => void;
+  onAnel2FluidezChange: (f: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
@@ -167,28 +169,20 @@ export function Controls(props: Props) {
         onChange={props.onGrainChange}
       />
       <Slider
-        label="Blur"
-        min={0}
-        max={300}
-        step={1}
-        value={props.blur}
-        onChange={props.onBlurChange}
-      />
-      <Slider
-        label="Fluidez"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.fluidez}
-        onChange={props.onFluidezChange}
-      />
-      <Slider
         label="Centro"
         min={0}
         max={1}
         step={0.01}
         value={props.centroWeight}
         onChange={props.onCentroWeightChange}
+      />
+      <Slider
+        label="Fluidez Centro"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.centroFluidez}
+        onChange={props.onCentroFluidezChange}
       />
       <Slider
         label="Anel 1"
@@ -199,12 +193,28 @@ export function Controls(props: Props) {
         onChange={props.onAnel1WeightChange}
       />
       <Slider
+        label="Fluidez Anel 1"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.anel1Fluidez}
+        onChange={props.onAnel1FluidezChange}
+      />
+      <Slider
         label="Anel 2"
         min={0}
         max={1}
         step={0.01}
         value={props.anel2Weight}
         onChange={props.onAnel2WeightChange}
+      />
+      <Slider
+        label="Fluidez Anel 2"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.anel2Fluidez}
+        onChange={props.onAnel2FluidezChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
