@@ -50,6 +50,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     ring2Weight, ring2Fluidez,
     ring3Weight, ring3Fluidez,
     ring4Weight, ring4Fluidez,
+    bordaWeight, bordaFluidez,
   } = params;
   target.width = width;
   target.height = height;
@@ -61,9 +62,10 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillRect(0, 0, width, height);
 
   // 2. Resolve effective sizes with nesting clamps. Each inner ring is
-  //    capped at the size of the next outer ring. Ring 4 = silhouette;
+  //    capped at the size of the next outer ring. Borda = silhouette;
   //    ring 0 = innermost hot core (sits on top of every other layer).
-  const eff4 = ring4Weight;
+  const effB = bordaWeight;
+  const eff4 = Math.min(ring4Weight, effB);
   const eff3 = Math.min(ring3Weight, eff4);
   const eff2 = Math.min(ring2Weight, eff3);
   const eff1 = Math.min(ring1Weight, eff2);
@@ -76,6 +78,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const thr2 = sizeToThreshold(eff2);
   const thr3 = sizeToThreshold(eff3);
   const thr4 = sizeToThreshold(eff4);
+  const thrB = sizeToThreshold(effB);
 
   // 4. Per-ring boundary blur widths (smoothstep band, scales with the
   //    ring's threshold so the blur is meaningful at both small and large
@@ -85,20 +88,22 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const band2 = Math.max(0.005, ring2Fluidez * thr2 * 1.2);
   const band3 = Math.max(0.005, ring3Fluidez * thr3 * 1.2);
   const band4 = Math.max(0.005, ring4Fluidez * thr4 * 1.2);
+  const bandB = Math.max(0.005, bordaFluidez * thrB * 1.2);
 
-  // 5. Palette colours. Five stops map to five rings (º0 innermost → º4
-  //    outermost). If the last stop has alpha < 0.05 it's a "fade marker"
-  //    (preset palette convention) — in that case ring 4 uses the bg
-  //    colour, so the layer becomes invisible but still controls silhouette
-  //    extent via ring4 sliders.
+  // 5. Palette colours. Six stops map to six rings (º0 innermost → Borda
+  //    outermost). If the Borda stop has alpha < 0.05 it's a "fade marker"
+  //    (preset palette convention) — Borda then uses the bg colour, so
+  //    the outermost layer becomes invisible but still controls silhouette
+  //    extent via borda sliders.
   const variant = palette.blobVariants[0];
   const c0 = hexToRgb(variant.stops[0].color);
   const c1 = hexToRgb(variant.stops[1].color);
   const c2 = hexToRgb(variant.stops[2].color);
   const c3 = hexToRgb(variant.stops[3].color);
-  const c4 = variant.stops[4].alpha < 0.05
+  const c4 = hexToRgb(variant.stops[4].color);
+  const cB = variant.stops[5].alpha < 0.05
     ? bg
-    : hexToRgb(variant.stops[4].color);
+    : hexToRgb(variant.stops[5].color);
 
   // 6. Pre-compute per-blob field params.
   const minDim = Math.min(width, height);
@@ -142,19 +147,23 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
         }
       }
 
-      // Ring 4 presence is also the silhouette alpha (outermost ring).
-      const b4 = smoothstep(thr4 - band4, thr4 + band4, totalField);
-      if (b4 <= 0) continue;
+      // Borda presence is the silhouette alpha (outermost ring).
+      const bB = smoothstep(thrB - bandB, thrB + bandB, totalField);
+      if (bB <= 0) continue;
 
+      const b4 = smoothstep(thr4 - band4, thr4 + band4, totalField);
       const b3 = smoothstep(thr3 - band3, thr3 + band3, totalField);
       const b2 = smoothstep(thr2 - band2, thr2 + band2, totalField);
       const b1 = smoothstep(thr1 - band1, thr1 + band1, totalField);
       const b0 = smoothstep(thr0 - band0, thr0 + band0, totalField);
 
-      // Layered blend: bg → º4 → º3 → º2 → º1 → º0 (innermost on top)
-      let r = bg.r * (1 - b4) + c4.r * b4;
-      let g = bg.g * (1 - b4) + c4.g * b4;
-      let bl = bg.b * (1 - b4) + c4.b * b4;
+      // Layered blend: bg → Borda → º4 → º3 → º2 → º1 → º0 (innermost on top)
+      let r = bg.r * (1 - bB) + cB.r * bB;
+      let g = bg.g * (1 - bB) + cB.g * bB;
+      let bl = bg.b * (1 - bB) + cB.b * bB;
+      r = r * (1 - b4) + c4.r * b4;
+      g = g * (1 - b4) + c4.g * b4;
+      bl = bl * (1 - b4) + c4.b * b4;
       r = r * (1 - b3) + c3.r * b3;
       g = g * (1 - b3) + c3.g * b3;
       bl = bl * (1 - b3) + c3.b * b3;

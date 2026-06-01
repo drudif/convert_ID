@@ -14,7 +14,7 @@ type Props = {
   width: number;
   height: number;
   paletteId: string;
-  customColors: [string, string, string, string, string, string];
+  customColors: [string, string, string, string, string, string, string];
   blobCount: number;
   irregularity: number;
   grain: number;
@@ -28,6 +28,8 @@ type Props = {
   ring3Fluidez: number;
   ring4Weight: number;
   ring4Fluidez: number;
+  bordaWeight: number;
+  bordaFluidez: number;
   onWidthChange: (w: number) => void;
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
@@ -45,11 +47,13 @@ type Props = {
   onRing3FluidezChange: (f: number) => void;
   onRing4WeightChange: (w: number) => void;
   onRing4FluidezChange: (f: number) => void;
+  onBordaWeightChange: (w: number) => void;
+  onBordaFluidezChange: (f: number) => void;
   onRandomize: () => void;
   onDownload: () => void;
 };
 
-const CUSTOM_SLOT_LABELS = ['Fundo', 'º0', 'º1', 'º2', 'º3', 'º4'];
+const CUSTOM_SLOT_LABELS = ['Fundo', 'º0', 'º1', 'º2', 'º3', 'º4', 'Borda'];
 
 function clampDim(n: number): number {
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -255,6 +259,22 @@ export function Controls(props: Props) {
         step={0.01}
         value={props.ring4Fluidez}
         onChange={props.onRing4FluidezChange}
+      />
+      <Slider
+        label="Borda"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.bordaWeight}
+        onChange={props.onBordaWeightChange}
+      />
+      <Slider
+        label="Fluidez Borda"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.bordaFluidez}
+        onChange={props.onBordaFluidezChange}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>

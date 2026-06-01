@@ -11,25 +11,27 @@ export default function App() {
   const [height, setHeight] = useState(1080);
   const [paletteId, setPaletteId] = useState('nightfall');
   const [customColors, setCustomColors] = useState<
-    [string, string, string, string, string, string]
-  >(['#1a0d3d', '#ffd479', '#ff7a4d', '#ec4899', '#6b46c1', '#1a0d3d']);
+    [string, string, string, string, string, string, string]
+  >(['#1a0d3d', '#ffd479', '#ff7a4d', '#ec4899', '#6b46c1', '#3a1d6d', '#1a0d3d']);
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
-  // Five nested rings (º0 innermost/hottest → º4 outermost / silhouette).
+  // Six nested rings (º0 innermost/hottest → Borda outermost = silhouette).
   // Each ring has SIZE (outer extent) and FLUIDEZ (boundary blur). Nesting
   // is enforced at render time — each inner ring is clamped to the next
   // outer one. º0 sits on top of all other layers.
-  const [ring0Weight, setRing0Weight] = useState(0.07);
+  const [ring0Weight, setRing0Weight] = useState(0.04);
   const [ring0Fluidez, setRing0Fluidez] = useState(0.25);
-  const [ring1Weight, setRing1Weight] = useState(0.18);
+  const [ring1Weight, setRing1Weight] = useState(0.15);
   const [ring1Fluidez, setRing1Fluidez] = useState(0.25);
-  const [ring2Weight, setRing2Weight] = useState(0.35);
+  const [ring2Weight, setRing2Weight] = useState(0.30);
   const [ring2Fluidez, setRing2Fluidez] = useState(0.25);
-  const [ring3Weight, setRing3Weight] = useState(0.55);
+  const [ring3Weight, setRing3Weight] = useState(0.50);
   const [ring3Fluidez, setRing3Fluidez] = useState(0.25);
-  const [ring4Weight, setRing4Weight] = useState(0.80);
+  const [ring4Weight, setRing4Weight] = useState(0.70);
   const [ring4Fluidez, setRing4Fluidez] = useState(0.25);
+  const [bordaWeight, setBordaWeight] = useState(0.85);
+  const [bordaFluidez, setBordaFluidez] = useState(0.25);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -55,11 +57,12 @@ export default function App() {
     ring2Weight, ring2Fluidez,
     ring3Weight, ring3Fluidez,
     ring4Weight, ring4Fluidez,
+    bordaWeight, bordaFluidez,
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
     setCustomColors((prev) => {
-      const next = [...prev] as [string, string, string, string, string, string];
+      const next = [...prev] as [string, string, string, string, string, string, string];
       next[idx] = color;
       return next;
     });
@@ -97,6 +100,8 @@ export default function App() {
         ring3Fluidez={ring3Fluidez}
         ring4Weight={ring4Weight}
         ring4Fluidez={ring4Fluidez}
+        bordaWeight={bordaWeight}
+        bordaFluidez={bordaFluidez}
         onWidthChange={setWidth}
         onHeightChange={setHeight}
         onPaletteChange={setPaletteId}
@@ -114,6 +119,8 @@ export default function App() {
         onRing3FluidezChange={setRing3Fluidez}
         onRing4WeightChange={setRing4Weight}
         onRing4FluidezChange={setRing4Fluidez}
+        onBordaWeightChange={setBordaWeight}
+        onBordaFluidezChange={setBordaFluidez}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
       />

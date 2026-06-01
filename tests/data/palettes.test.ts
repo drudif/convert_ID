@@ -50,8 +50,8 @@ describe('palettes', () => {
 });
 
 describe('buildCustomPalette', () => {
-  const sampleColors: [string, string, string, string, string, string] = [
-    '#111111', '#ffff00', '#ff0000', '#00ff00', '#0000ff', '#ffffff',
+  const sampleColors: [string, string, string, string, string, string, string] = [
+    '#111111', '#ffff00', '#ff0000', '#00ff00', '#0000ff', '#aa00ff', '#ffffff',
   ];
 
   it('returns a Palette with id="custom" and the given background', () => {
@@ -60,26 +60,27 @@ describe('buildCustomPalette', () => {
     expect(palette.background).toBe('#111111');
   });
 
-  it('produces 1 variant with 5 stops (º0..º4)', () => {
+  it('produces 1 variant with 6 stops (º0..º4 + Borda)', () => {
     const palette = buildCustomPalette(sampleColors);
     expect(palette.blobVariants).toHaveLength(1);
-    expect(palette.blobVariants[0].stops).toHaveLength(5);
+    expect(palette.blobVariants[0].stops).toHaveLength(6);
   });
 
-  it('assigns colors to stops in order (º0, º1, º2, º3, º4)', () => {
+  it('assigns colors to stops in order (º0, º1, º2, º3, º4, Borda)', () => {
     const palette = buildCustomPalette(sampleColors);
     const stops = palette.blobVariants[0].stops;
     expect(stops[0].color).toBe('#ffff00');
     expect(stops[1].color).toBe('#ff0000');
     expect(stops[2].color).toBe('#00ff00');
     expect(stops[3].color).toBe('#0000ff');
-    expect(stops[4].color).toBe('#ffffff');
+    expect(stops[4].color).toBe('#aa00ff');
+    expect(stops[5].color).toBe('#ffffff');
   });
 
-  it('uses fixed alphas [1.0, 0.95, 0.85, 0.5, 1.0] and offsets [0, 0.25, 0.5, 0.75, 1]', () => {
+  it('uses fixed alphas [1.0, 0.95, 0.85, 0.6, 0.4, 1.0] and offsets [0, 0.2, 0.4, 0.6, 0.8, 1]', () => {
     const palette = buildCustomPalette(sampleColors);
     const stops = palette.blobVariants[0].stops;
-    expect(stops.map((s) => s.alpha)).toEqual([1.0, 0.95, 0.85, 0.5, 1.0]);
-    expect(stops.map((s) => s.offset)).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(stops.map((s) => s.alpha)).toEqual([1.0, 0.95, 0.85, 0.6, 0.4, 1.0]);
+    expect(stops.map((s) => s.offset)).toEqual([0, 0.2, 0.4, 0.6, 0.8, 1]);
   });
 });

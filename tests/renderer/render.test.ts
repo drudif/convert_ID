@@ -14,11 +14,12 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     composition: generateComposition(1, 3, nightfall),
     grain: 0.5,
     irregularity: 0,
-    ring0Weight: 0.07, ring0Fluidez: 0.25,
-    ring1Weight: 0.18, ring1Fluidez: 0.25,
-    ring2Weight: 0.35, ring2Fluidez: 0.25,
-    ring3Weight: 0.55, ring3Fluidez: 0.25,
-    ring4Weight: 0.80, ring4Fluidez: 0.25,
+    ring0Weight: 0.04, ring0Fluidez: 0.25,
+    ring1Weight: 0.15, ring1Fluidez: 0.25,
+    ring2Weight: 0.30, ring2Fluidez: 0.25,
+    ring3Weight: 0.50, ring3Fluidez: 0.25,
+    ring4Weight: 0.70, ring4Fluidez: 0.25,
+    bordaWeight: 0.85, bordaFluidez: 0.25,
     ...overrides,
   };
 }

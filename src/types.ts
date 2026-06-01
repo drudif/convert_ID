@@ -51,7 +51,7 @@ export type RenderParams = {
   composition: Composition;
   grain: number;          // 0–1
   irregularity: number;   // 0–1; mini-cluster spread amplitude
-  // Five nested rings (º0 innermost/hottest → º4 outermost / silhouette edge).
+  // Six nested rings (º0 innermost → Borda outermost = silhouette edge).
   // Each ring has a SIZE (spatial extent) and a FLUIDEZ (boundary blur).
   // Nesting is enforced at render time: each inner ring is clamped to the
   // size of the next outer one. º0 sits on top of every other ring.
@@ -65,4 +65,6 @@ export type RenderParams = {
   ring3Fluidez: number;
   ring4Weight: number;
   ring4Fluidez: number;
+  bordaWeight: number;
+  bordaFluidez: number;
 };
