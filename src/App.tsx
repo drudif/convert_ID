@@ -14,13 +14,13 @@ export default function App() {
     [string, string, string, string, string]
   >(['#1a0d3d', '#ff7a4d', '#ec4899', '#6b46c1', '#1a0d3d']);
   const [blobCount, setBlobCount] = useState(5);
-  const [irregularity, setIrregularity] = useState(0);
+  const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
-  const [fluidez, setFluidez] = useState(0);
-  const [centroWeight, setCentroWeight] = useState(0.33);
-  const [anel1Weight, setAnel1Weight] = useState(0.33);
-  const [anel2Weight, setAnel2Weight] = useState(0.34);
+  const [fluidez, setFluidez] = useState(0.3);
+  const [centroWeight, setCentroWeight] = useState(0.20);
+  const [anel1Weight, setAnel1Weight] = useState(0.35);
+  const [anel2Weight, setAnel2Weight] = useState(0.45);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 
