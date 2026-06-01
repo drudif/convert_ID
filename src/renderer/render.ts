@@ -20,9 +20,12 @@ export function applyHardness(stops: GradientStop[], hardness: number): Gradient
   return stops.map((s) => ({ ...s, offset: s.offset * factor }));
 }
 
-// Apply per-band weights to a 4-stop gradient. The widths place each
-// transition along the LUT [0..1]; anything past the sum fades to bg
-// via the buildLut extension.
+// Apply per-band weights to a 4-stop gradient. The sliders are normalised
+// to their SUM so each one represents its band's share of the LUT [0..1]
+// — three symmetric sliders, each behaves the same way. Without
+// normalisation the cumulative offsets cap at 1 (because the LUT can't
+// extend further) which makes later sliders feel different from Centro.
+// Silhouette size is the Fluidez slider's job, not these.
 function applyBandWeights(
   stops: GradientStop[],
   centroW: number,
@@ -30,14 +33,15 @@ function applyBandWeights(
   anel2W: number,
 ): GradientStop[] {
   if (stops.length !== 4) return stops; // only the standard 4-stop palettes are weighted
-  const o1 = Math.min(1, centroW);
-  const o2 = Math.min(1, o1 + anel1W);
-  const o3 = Math.min(1, o2 + anel2W);
+  const total = centroW + anel1W + anel2W;
+  if (total <= 0) return stops; // degenerate; leave stops untouched
+  const c = centroW / total;
+  const a1 = anel1W / total;
   return [
     { ...stops[0], offset: 0 },
-    { ...stops[1], offset: o1 },
-    { ...stops[2], offset: o2 },
-    { ...stops[3], offset: o3 },
+    { ...stops[1], offset: c },
+    { ...stops[2], offset: c + a1 },
+    { ...stops[3], offset: 1 },
   ];
 }
 
