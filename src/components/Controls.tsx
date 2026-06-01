@@ -14,10 +14,12 @@ type Props = {
   width: number;
   height: number;
   paletteId: string;
-  customColors: [string, string, string, string, string];
+  customColors: [string, string, string, string, string, string];
   blobCount: number;
   irregularity: number;
   grain: number;
+  ring0Weight: number;
+  ring0Fluidez: number;
   ring1Weight: number;
   ring1Fluidez: number;
   ring2Weight: number;
@@ -33,6 +35,8 @@ type Props = {
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
+  onRing0WeightChange: (w: number) => void;
+  onRing0FluidezChange: (f: number) => void;
   onRing1WeightChange: (w: number) => void;
   onRing1FluidezChange: (f: number) => void;
   onRing2WeightChange: (w: number) => void;
@@ -45,7 +49,7 @@ type Props = {
   onDownload: () => void;
 };
 
-const CUSTOM_SLOT_LABELS = ['Fundo', 'º1', 'º2', 'º3', 'º4'];
+const CUSTOM_SLOT_LABELS = ['Fundo', 'º0', 'º1', 'º2', 'º3', 'º4'];
 
 function clampDim(n: number): number {
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -171,6 +175,22 @@ export function Controls(props: Props) {
         step={0.01}
         value={props.grain}
         onChange={props.onGrainChange}
+      />
+      <Slider
+        label="º0"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.ring0Weight}
+        onChange={props.onRing0WeightChange}
+      />
+      <Slider
+        label="Fluidez º0"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.ring0Fluidez}
+        onChange={props.onRing0FluidezChange}
       />
       <Slider
         label="º1"

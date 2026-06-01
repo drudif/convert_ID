@@ -11,15 +11,18 @@ export default function App() {
   const [height, setHeight] = useState(1080);
   const [paletteId, setPaletteId] = useState('nightfall');
   const [customColors, setCustomColors] = useState<
-    [string, string, string, string, string]
-  >(['#1a0d3d', '#ff7a4d', '#ec4899', '#6b46c1', '#1a0d3d']);
+    [string, string, string, string, string, string]
+  >(['#1a0d3d', '#ffd479', '#ff7a4d', '#ec4899', '#6b46c1', '#1a0d3d']);
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
-  // Four nested rings (º1 innermost → º4 outermost / silhouette). Each ring
-  // has SIZE (outer extent) and FLUIDEZ (boundary blur). Nesting is enforced
-  // at render time — each inner ring is clamped to the next outer one.
-  const [ring1Weight, setRing1Weight] = useState(0.15);
+  // Five nested rings (º0 innermost/hottest → º4 outermost / silhouette).
+  // Each ring has SIZE (outer extent) and FLUIDEZ (boundary blur). Nesting
+  // is enforced at render time — each inner ring is clamped to the next
+  // outer one. º0 sits on top of all other layers.
+  const [ring0Weight, setRing0Weight] = useState(0.07);
+  const [ring0Fluidez, setRing0Fluidez] = useState(0.25);
+  const [ring1Weight, setRing1Weight] = useState(0.18);
   const [ring1Fluidez, setRing1Fluidez] = useState(0.25);
   const [ring2Weight, setRing2Weight] = useState(0.35);
   const [ring2Fluidez, setRing2Fluidez] = useState(0.25);
@@ -47,6 +50,7 @@ export default function App() {
     composition,
     grain,
     irregularity,
+    ring0Weight, ring0Fluidez,
     ring1Weight, ring1Fluidez,
     ring2Weight, ring2Fluidez,
     ring3Weight, ring3Fluidez,
@@ -55,7 +59,7 @@ export default function App() {
 
   const handleCustomColorChange = (idx: number, color: string) => {
     setCustomColors((prev) => {
-      const next = [...prev] as [string, string, string, string, string];
+      const next = [...prev] as [string, string, string, string, string, string];
       next[idx] = color;
       return next;
     });
@@ -83,6 +87,8 @@ export default function App() {
         blobCount={blobCount}
         irregularity={irregularity}
         grain={grain}
+        ring0Weight={ring0Weight}
+        ring0Fluidez={ring0Fluidez}
         ring1Weight={ring1Weight}
         ring1Fluidez={ring1Fluidez}
         ring2Weight={ring2Weight}
@@ -98,6 +104,8 @@ export default function App() {
         onBlobCountChange={setBlobCount}
         onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
+        onRing0WeightChange={setRing0Weight}
+        onRing0FluidezChange={setRing0Fluidez}
         onRing1WeightChange={setRing1Weight}
         onRing1FluidezChange={setRing1Fluidez}
         onRing2WeightChange={setRing2Weight}
