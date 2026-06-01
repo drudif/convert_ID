@@ -4,9 +4,9 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
 const SUBCENTER_COUNT = 3;        // satellites per blob
-const SUBCENTER_R_MIN = 0.5;
-const SUBCENTER_R_RANGE = 0.3;    // rf ∈ [0.5, 0.8] — large enough that the satellite
-                                  // field strongly overlaps the primary's at any offset
+const SUBCENTER_R_MIN = 0.7;
+const SUBCENTER_R_RANGE = 0.25;   // rf ∈ [0.7, 0.95] — satellite almost as big as primary
+                                  // so its Centro region always overlaps the primary's
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);

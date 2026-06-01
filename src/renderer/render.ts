@@ -1,8 +1,9 @@
 import { applyGrain } from './grain';
 import type { GradientStop, RenderParams } from '../types';
 
-const SUBCENTER_OFFSET_SCALE = 0.5; // max satellite offset = 0.5 · baseR · irregularity —
-                                    // tight enough that the metaball never loses its neck
+const SUBCENTER_OFFSET_SCALE = 0.4; // max satellite offset = 0.4 · baseR · irregularity —
+                                    // tight enough that the Centro corridor between primary
+                                    // and satellite is wider than any single peak
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');

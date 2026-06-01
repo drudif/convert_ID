@@ -66,8 +66,8 @@ describe('generateComposition', () => {
         expect(sub.ox).toBeLessThanOrEqual(1);
         expect(sub.oy).toBeGreaterThanOrEqual(-1);
         expect(sub.oy).toBeLessThanOrEqual(1);
-        expect(sub.rf).toBeGreaterThanOrEqual(0.5);
-        expect(sub.rf).toBeLessThanOrEqual(0.8);
+        expect(sub.rf).toBeGreaterThanOrEqual(0.7);
+        expect(sub.rf).toBeLessThanOrEqual(0.95);
       }
     }
   });
