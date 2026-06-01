@@ -183,7 +183,7 @@ export function Controls(props: Props) {
       <Slider
         label="º0"
         min={0}
-        max={props.ring1Weight}
+        max={1}
         step={0.01}
         value={props.ring0Weight}
         onChange={props.onRing0WeightChange}
@@ -198,8 +198,8 @@ export function Controls(props: Props) {
       />
       <Slider
         label="º1"
-        min={props.ring0Weight}
-        max={props.ring2Weight}
+        min={0}
+        max={1}
         step={0.01}
         value={props.ring1Weight}
         onChange={props.onRing1WeightChange}
@@ -214,8 +214,8 @@ export function Controls(props: Props) {
       />
       <Slider
         label="º2"
-        min={props.ring1Weight}
-        max={props.ring3Weight}
+        min={0}
+        max={1}
         step={0.01}
         value={props.ring2Weight}
         onChange={props.onRing2WeightChange}
@@ -230,8 +230,8 @@ export function Controls(props: Props) {
       />
       <Slider
         label="º3"
-        min={props.ring2Weight}
-        max={props.ring4Weight}
+        min={0}
+        max={1}
         step={0.01}
         value={props.ring3Weight}
         onChange={props.onRing3WeightChange}
@@ -246,8 +246,8 @@ export function Controls(props: Props) {
       />
       <Slider
         label="º4"
-        min={props.ring3Weight}
-        max={props.bordaWeight}
+        min={0}
+        max={1}
         step={0.01}
         value={props.ring4Weight}
         onChange={props.onRing4WeightChange}
@@ -262,7 +262,7 @@ export function Controls(props: Props) {
       />
       <Slider
         label="Borda"
-        min={props.ring4Weight}
+        min={0}
         max={1}
         step={0.01}
         value={props.bordaWeight}

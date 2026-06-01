@@ -68,6 +68,20 @@ export default function App() {
     });
   };
 
+  // Ring size handlers — each one clamps the incoming value to the
+  // current values of the predecessor and successor rings. The slider
+  // itself stays static (0..1) so other sliders' tracks never change
+  // when one is being edited; only the value being dragged is locked
+  // when it reaches a neighbour.
+  const clamp = (v: number, lo: number, hi: number) =>
+    v < lo ? lo : v > hi ? hi : v;
+  const handleRing0Weight = (v: number) => setRing0Weight(clamp(v, 0, ring1Weight));
+  const handleRing1Weight = (v: number) => setRing1Weight(clamp(v, ring0Weight, ring2Weight));
+  const handleRing2Weight = (v: number) => setRing2Weight(clamp(v, ring1Weight, ring3Weight));
+  const handleRing3Weight = (v: number) => setRing3Weight(clamp(v, ring2Weight, ring4Weight));
+  const handleRing4Weight = (v: number) => setRing4Weight(clamp(v, ring3Weight, bordaWeight));
+  const handleBordaWeight = (v: number) => setBordaWeight(clamp(v, ring4Weight, 1));
+
   const handleRandomize = () => {
     setSeed(Math.floor(Math.random() * 2 ** 31));
   };
@@ -109,17 +123,17 @@ export default function App() {
         onBlobCountChange={setBlobCount}
         onIrregularityChange={setIrregularity}
         onGrainChange={setGrain}
-        onRing0WeightChange={setRing0Weight}
+        onRing0WeightChange={handleRing0Weight}
         onRing0FluidezChange={setRing0Fluidez}
-        onRing1WeightChange={setRing1Weight}
+        onRing1WeightChange={handleRing1Weight}
         onRing1FluidezChange={setRing1Fluidez}
-        onRing2WeightChange={setRing2Weight}
+        onRing2WeightChange={handleRing2Weight}
         onRing2FluidezChange={setRing2Fluidez}
-        onRing3WeightChange={setRing3Weight}
+        onRing3WeightChange={handleRing3Weight}
         onRing3FluidezChange={setRing3Fluidez}
-        onRing4WeightChange={setRing4Weight}
+        onRing4WeightChange={handleRing4Weight}
         onRing4FluidezChange={setRing4Fluidez}
-        onBordaWeightChange={setBordaWeight}
+        onBordaWeightChange={handleBordaWeight}
         onBordaFluidezChange={setBordaFluidez}
         onRandomize={handleRandomize}
         onDownload={handleDownload}
