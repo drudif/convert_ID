@@ -166,11 +166,15 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
 
-  // 5. Per-pixel evaluation.
+  // 5. Per-pixel evaluation. Per-mini contribution uses miniRSq as the
+  // denominator smoothing instead of a tiny EPS — i.e. a Lorentzian bump
+  // miniRSq/(d²+miniRSq) instead of pure 1/d². Peak per mini is bounded
+  // at 1, so the field across the cluster is smooth and the heat map
+  // shows the cluster's centroid as a single warm peak instead of N
+  // distinct hot dots at every mini centre.
   const img = targetCtx.getImageData(0, 0, width, height);
   const data = img.data;
   const nBlobs = blobs.length;
-  const EPS = 0.5;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -182,7 +186,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
           const mini = b.minis[m];
           const dx = x - mini.cx;
           const dy = y - mini.cy;
-          totalField += miniRSq / (dx * dx + dy * dy + EPS);
+          totalField += miniRSq / (dx * dx + dy * dy + miniRSq);
         }
       }
 
