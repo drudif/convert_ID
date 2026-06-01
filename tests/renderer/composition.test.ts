@@ -57,20 +57,24 @@ describe('generateComposition', () => {
     expect(ratio0).toBeLessThan(0.8);
   });
 
-  it('each blob carries 16 outline anchors in [-1, 1]', () => {
+  it('each blob carries 3 subcenters with valid offsets and radius factors', () => {
     const comp = generateComposition(11, 4, nightfall);
     for (const b of comp.blobs) {
-      expect(b.harmonics.anchors).toHaveLength(16);
-      for (const a of b.harmonics.anchors) {
-        expect(a).toBeGreaterThanOrEqual(-1);
-        expect(a).toBeLessThanOrEqual(1);
+      expect(b.harmonics.subcenters).toHaveLength(3);
+      for (const sub of b.harmonics.subcenters) {
+        expect(sub.ox).toBeGreaterThanOrEqual(-1);
+        expect(sub.ox).toBeLessThanOrEqual(1);
+        expect(sub.oy).toBeGreaterThanOrEqual(-1);
+        expect(sub.oy).toBeLessThanOrEqual(1);
+        expect(sub.rf).toBeGreaterThanOrEqual(0.4);
+        expect(sub.rf).toBeLessThanOrEqual(0.7);
       }
     }
   });
 
-  it('different seeds produce different anchors (so blobs have distinct outlines)', () => {
+  it('different seeds produce different subcenters', () => {
     const a = generateComposition(1, 1, nightfall);
     const b = generateComposition(2, 1, nightfall);
-    expect(a.blobs[0].harmonics.anchors).not.toEqual(b.blobs[0].harmonics.anchors);
+    expect(a.blobs[0].harmonics.subcenters).not.toEqual(b.blobs[0].harmonics.subcenters);
   });
 });

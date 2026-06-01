@@ -3,7 +3,9 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
-const OUTLINE_ANCHORS = 16; // perimeter samples; renderer smoothstep-interpolates between them
+const SUBCENTER_COUNT = 3;        // satellites per blob
+const SUBCENTER_R_MIN = 0.4;
+const SUBCENTER_R_RANGE = 0.3;    // rf ∈ [0.4, 0.7]
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);
@@ -31,15 +33,18 @@ export function generateComposition(
     const baseR = RADIUS_MIN + rng() * (RADIUS_MAX - RADIUS_MIN);
     const variantIdx = weightedPick(rng, weights);
 
-    // 16 random anchors around the perimeter. The renderer uses smoothstep
-    // interpolation between them, producing an asymmetric organic outline
-    // with no rotational symmetry — unlike sin(kθ) harmonics which always
-    // give k equal lobes ("floral" look the user wants to avoid).
-    const anchors: number[] = [];
-    for (let i = 0; i < OUTLINE_ANCHORS; i++) {
-      anchors.push(rng() * 2 - 1);
+    // Three off-centre satellites positioned within ~0.7·baseR of the primary.
+    // Their metaball fields add to the primary's, producing bulges in their
+    // directions — non-radial protrusions, asymmetric organic silhouettes.
+    const subcenters = [];
+    for (let s = 0; s < SUBCENTER_COUNT; s++) {
+      subcenters.push({
+        ox: rng() * 2 - 1,
+        oy: rng() * 2 - 1,
+        rf: SUBCENTER_R_MIN + rng() * SUBCENTER_R_RANGE,
+      });
     }
-    const harmonics = { anchors };
+    const harmonics = { subcenters };
 
     blobs.push({ x: cx, y: cy, radius: baseR, variantIdx, harmonics });
   }

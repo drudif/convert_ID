@@ -16,12 +16,19 @@ export type Palette = {
   variantWeights?: number[];   // optional; parallel to blobVariants; uniform if omitted
 };
 
+export type BlobSubcenter = {
+  ox: number; // offset x in [-1, 1]; renderer scales by baseR · irregularity
+  oy: number; // offset y in [-1, 1]
+  rf: number; // radius factor in [0.4, 0.7]; renderer scales by irregularity
+};
+
 export type BlobHarmonics = {
-  // Random samples around the perimeter, smoothstep-interpolated by the
-  // renderer. Sin-based harmonics are rotationally symmetric (k=5 always
-  // gives 5 equal lobes); anchor noise produces irregular asymmetric
-  // outlines like ink blots / clouds.
-  anchors: number[]; // each in [-1, 1]
+  // Off-centre satellites that contribute to the metaball field alongside
+  // the primary centre. Any r(θ)-based distortion is inherently radial
+  // (spikes always point outward from one centre); using multiple field
+  // sources puts the bulges wherever the satellites are placed — organic
+  // ink-blot silhouettes instead of stars / flowers.
+  subcenters: BlobSubcenter[];
 };
 
 export type CompositionBlob = {

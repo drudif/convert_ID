@@ -1,9 +1,7 @@
 import { applyGrain } from './grain';
 import type { GradientStop, RenderParams } from '../types';
 
-const TWO_PI = Math.PI * 2;
-const ANGLE_LUT_SIZE = 256;
-const ANGLE_LUT_MASK = ANGLE_LUT_SIZE - 1;
+const SUBCENTER_OFFSET_SCALE = 0.7; // max satellite offset = 0.7 · baseR · irregularity
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
@@ -107,35 +105,6 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-// Precompute a per-blob outline lookup table indexed by angle, so the
-// per-pixel hot loop only does an array lookup. Built from random
-// "anchor" samples around the perimeter, smoothstep-interpolated and
-// wrapped. This produces irregular asymmetric outlines (ink-blot /
-// cloud-shaped) instead of the rotationally symmetric flowers that
-// sin(kθ) harmonics inevitably create.
-function buildOutlineLut(anchors: number[]): Float32Array {
-  const lut = new Float32Array(ANGLE_LUT_SIZE);
-  const N = anchors.length;
-  let maxAbs = 0;
-  for (let i = 0; i < ANGLE_LUT_SIZE; i++) {
-    const pos = (i / ANGLE_LUT_SIZE) * N;
-    const lowIdx = Math.floor(pos) % N;
-    const highIdx = (lowIdx + 1) % N;
-    const tRaw = pos - Math.floor(pos);
-    const t = tRaw * tRaw * (3 - 2 * tRaw); // smoothstep for C1-continuous outline
-    const value = anchors[lowIdx] * (1 - t) + anchors[highIdx] * t;
-    lut[i] = value;
-    const abs = value < 0 ? -value : value;
-    if (abs > maxAbs) maxAbs = abs;
-  }
-  // Normalise so every blob has the same max perturbation amplitude at a
-  // given irregularity slider value — consistent behaviour across seeds.
-  if (maxAbs > 0) {
-    for (let i = 0; i < ANGLE_LUT_SIZE; i++) lut[i] /= maxAbs;
-  }
-  return lut;
-}
-
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const {
     width, height, palette, composition,
@@ -159,27 +128,40 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   );
   const lut = buildLut(weightedStops, bg);
 
-  // 3. Pre-compute per-blob field params + outline LUT.
+  // 3. Pre-compute per-blob field params + flattened subcenter coords (in px).
+  // Subcenter offsets and radii both scale with irregularity, so at
+  // irregularity=0 the satellites have zero radius (no contribution) and the
+  // blob is exactly a circle. As irregularity rises, satellites grow into
+  // existence and pull the silhouette outward in their offset directions.
   const minDim = Math.min(width, height);
+  const offsetScale = SUBCENTER_OFFSET_SCALE * irregularity;
   const blobs = composition.blobs.map((b) => {
     const r = b.radius * minDim;
+    const subs: { cx: number; cy: number; rSq: number }[] = [];
+    if (irregularity > 0) {
+      for (const sub of b.harmonics.subcenters) {
+        const subR = r * sub.rf * irregularity;
+        subs.push({
+          cx: b.x * width + sub.ox * r * offsetScale,
+          cy: b.y * height + sub.oy * r * offsetScale,
+          rSq: subR * subR,
+        });
+      }
+    }
     return {
       cx: b.x * width,
       cy: b.y * height,
       rSq: r * r,
-      outlineLut: buildOutlineLut(b.harmonics.anchors),
+      subs,
     };
   });
 
   // 4. Heat-map field mapping (equal-area, γ=1). Fluidez lowers threshold to
   // widen the silhouette and let neighbouring blobs merge into one metaball.
-  // Outline harmonics distort r(θ) — same total field strength per blob,
-  // wavy boundary.
   const threshold = 1.0 - fluidez * 0.85;
   const edgeBand = Math.max(0.02, threshold * 0.08);
   const edgeLo = Math.max(0.001, threshold - edgeBand);
   const edgeHi = threshold + edgeBand;
-  const outlineGain = irregularity * 0.7; // strong lobes at max irregularity
 
   // 5. Per-pixel evaluation.
   const img = targetCtx.getImageData(0, 0, width, height);
@@ -192,20 +174,17 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       let totalField = 0;
       for (let i = 0; i < nBlobs; i++) {
         const b = blobs[i];
+        // Primary contribution
         const dx = x - b.cx;
         const dy = y - b.cy;
-        const d2 = dx * dx + dy * dy + EPS;
-
-        let effRSq = b.rSq;
-        if (outlineGain > 0) {
-          // Angle → outline LUT index. atan2 returns [-π, π]; remap to [0, 1) then scale.
-          const angle = Math.atan2(dy, dx);
-          const idx = ((angle * (ANGLE_LUT_SIZE / TWO_PI)) + ANGLE_LUT_SIZE) | 0;
-          const lutAt = b.outlineLut[idx & ANGLE_LUT_MASK];
-          const factor = 1 + lutAt * outlineGain;
-          effRSq = b.rSq * factor * factor;
+        totalField += b.rSq / (dx * dx + dy * dy + EPS);
+        // Satellite contributions add bulges in their offset directions
+        for (let s = 0; s < b.subs.length; s++) {
+          const sub = b.subs[s];
+          const sdx = x - sub.cx;
+          const sdy = y - sub.cy;
+          totalField += sub.rSq / (sdx * sdx + sdy * sdy + EPS);
         }
-        totalField += effRSq / d2;
       }
 
       const inside = smoothstep(edgeLo, edgeHi, totalField);
