@@ -3,8 +3,7 @@ import type { Composition, CompositionBlob, Palette } from '../types';
 
 const RADIUS_MIN = 0.2;
 const RADIUS_MAX = 0.5;
-const TWO_PI = Math.PI * 2;
-const HARMONIC_COUNT = 5; // k = 3..7; k=2 deliberately skipped (it's an ellipse)
+const OUTLINE_ANCHORS = 16; // perimeter samples; renderer smoothstep-interpolates between them
 
 function weightedPick(rng: () => number, weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0);
@@ -32,25 +31,15 @@ export function generateComposition(
     const baseR = RADIUS_MIN + rng() * (RADIUS_MAX - RADIUS_MIN);
     const variantIdx = weightedPick(rng, weights);
 
-    // Pick ONE dominant harmonic per blob (gives the silhouette a definite
-    // lobe count — 3 = triangle, 5 = starfish, 6 = flower, etc). The other
-    // harmonics get small random amps so the lobes aren't perfectly
-    // symmetric. Without a dominant, summing 5 mid-amp sines just smooths
-    // out to a soft wavy ellipse.
-    const dominantIdx = Math.floor(rng() * HARMONIC_COUNT);
-    const amps: number[] = [];
-    const phases: number[] = [];
-    for (let h = 0; h < HARMONIC_COUNT; h++) {
-      const sign = rng() > 0.5 ? 1 : -1;
-      const mag = rng();
-      if (h === dominantIdx) {
-        amps.push(sign * (0.7 + mag * 0.3));   // |amp| in [0.7, 1.0]
-      } else {
-        amps.push(sign * mag * 0.3);            // |amp| in [0, 0.3]
-      }
-      phases.push(rng() * TWO_PI);
+    // 16 random anchors around the perimeter. The renderer uses smoothstep
+    // interpolation between them, producing an asymmetric organic outline
+    // with no rotational symmetry — unlike sin(kθ) harmonics which always
+    // give k equal lobes ("floral" look the user wants to avoid).
+    const anchors: number[] = [];
+    for (let i = 0; i < OUTLINE_ANCHORS; i++) {
+      anchors.push(rng() * 2 - 1);
     }
-    const harmonics = { amps, phases };
+    const harmonics = { anchors };
 
     blobs.push({ x: cx, y: cy, radius: baseR, variantIdx, harmonics });
   }

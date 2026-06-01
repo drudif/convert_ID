@@ -108,24 +108,24 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 // Precompute a per-blob outline lookup table indexed by angle, so the
-// per-pixel hot loop only does an array lookup (no sin calls).
-// Frequencies start at k=3 — k=2 is intentionally skipped because it
-// produces an ellipse, not an organic blot. Five harmonics layered
-// together give the irregular "ink on paper" silhouette.
-const HARMONIC_K_OFFSET = 3;
-
-function buildOutlineLut(amps: number[], phases: number[]): Float32Array {
+// per-pixel hot loop only does an array lookup. Built from random
+// "anchor" samples around the perimeter, smoothstep-interpolated and
+// wrapped. This produces irregular asymmetric outlines (ink-blot /
+// cloud-shaped) instead of the rotationally symmetric flowers that
+// sin(kθ) harmonics inevitably create.
+function buildOutlineLut(anchors: number[]): Float32Array {
   const lut = new Float32Array(ANGLE_LUT_SIZE);
-  const N = amps.length;
+  const N = anchors.length;
   let maxAbs = 0;
   for (let i = 0; i < ANGLE_LUT_SIZE; i++) {
-    const angle = (i / ANGLE_LUT_SIZE) * TWO_PI;
-    let sum = 0;
-    for (let k = 0; k < N; k++) {
-      sum += amps[k] * Math.sin((HARMONIC_K_OFFSET + k) * angle + phases[k]);
-    }
-    lut[i] = sum;
-    const abs = sum < 0 ? -sum : sum;
+    const pos = (i / ANGLE_LUT_SIZE) * N;
+    const lowIdx = Math.floor(pos) % N;
+    const highIdx = (lowIdx + 1) % N;
+    const tRaw = pos - Math.floor(pos);
+    const t = tRaw * tRaw * (3 - 2 * tRaw); // smoothstep for C1-continuous outline
+    const value = anchors[lowIdx] * (1 - t) + anchors[highIdx] * t;
+    lut[i] = value;
+    const abs = value < 0 ? -value : value;
     if (abs > maxAbs) maxAbs = abs;
   }
   // Normalise so every blob has the same max perturbation amplitude at a
@@ -167,7 +167,7 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       cx: b.x * width,
       cy: b.y * height,
       rSq: r * r,
-      outlineLut: buildOutlineLut(b.harmonics.amps, b.harmonics.phases),
+      outlineLut: buildOutlineLut(b.harmonics.anchors),
     };
   });
 

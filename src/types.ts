@@ -17,12 +17,11 @@ export type Palette = {
 };
 
 export type BlobHarmonics = {
-  // Outline distortion: r(θ) = baseR * (1 + irregularity · Σ amps[k]·sin(K[k]·θ + phases[k]))
-  // K[k] starts at 3 (k=2 is intentionally skipped — it produces ellipses,
-  // not organic blots). Multiple high-frequency harmonics layered together
-  // give the irregular "ink-blot" silhouette.
-  amps: number[];   // each in [-1, 1]
-  phases: number[]; // each in [0, 2π]
+  // Random samples around the perimeter, smoothstep-interpolated by the
+  // renderer. Sin-based harmonics are rotationally symmetric (k=5 always
+  // gives 5 equal lobes); anchor noise produces irregular asymmetric
+  // outlines like ink blots / clouds.
+  anchors: number[]; // each in [-1, 1]
 };
 
 export type CompositionBlob = {

@@ -57,25 +57,20 @@ describe('generateComposition', () => {
     expect(ratio0).toBeLessThan(0.8);
   });
 
-  it('each blob carries five outline harmonics (amps in [-1,1], phases in [0, 2π])', () => {
+  it('each blob carries 16 outline anchors in [-1, 1]', () => {
     const comp = generateComposition(11, 4, nightfall);
     for (const b of comp.blobs) {
-      expect(b.harmonics.amps).toHaveLength(5);
-      expect(b.harmonics.phases).toHaveLength(5);
-      for (const a of b.harmonics.amps) {
+      expect(b.harmonics.anchors).toHaveLength(16);
+      for (const a of b.harmonics.anchors) {
         expect(a).toBeGreaterThanOrEqual(-1);
         expect(a).toBeLessThanOrEqual(1);
-      }
-      for (const p of b.harmonics.phases) {
-        expect(p).toBeGreaterThanOrEqual(0);
-        expect(p).toBeLessThan(Math.PI * 2);
       }
     }
   });
 
-  it('different seeds produce different harmonics (so blobs have distinct outlines)', () => {
+  it('different seeds produce different anchors (so blobs have distinct outlines)', () => {
     const a = generateComposition(1, 1, nightfall);
     const b = generateComposition(2, 1, nightfall);
-    expect(a.blobs[0].harmonics.amps).not.toEqual(b.blobs[0].harmonics.amps);
+    expect(a.blobs[0].harmonics.anchors).not.toEqual(b.blobs[0].harmonics.anchors);
   });
 });
