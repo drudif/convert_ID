@@ -4,8 +4,12 @@ import type { GradientStop, RenderParams } from '../types';
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
                                                   // produce the same field as 1 primary R
-const MINI_OFFSET_SCALE = 0.4;                    // tight cloud — guarantees connection
-                                                  // and a single visible heat peak
+const MINI_OFFSET_SCALE = 0.65;                   // spreads minis enough that each blob
+                                                  // grows multiple sub-peaks at high
+                                                  // irregularity (organic flowing shapes
+                                                  // like the user's references) while
+                                                  // Lorentzian smoothing keeps them
+                                                  // connected as one silhouette
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');

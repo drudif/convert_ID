@@ -13,7 +13,7 @@ export default function App() {
   const [customColors, setCustomColors] = useState<
     [string, string, string, string, string]
   >(['#1a0d3d', '#ff7a4d', '#ec4899', '#6b46c1', '#1a0d3d']);
-  const [blobCount, setBlobCount] = useState(3);
+  const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0);
   const [grain, setGrain] = useState(0.6);
   const [blur, setBlur] = useState(120);
