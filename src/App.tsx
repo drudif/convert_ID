@@ -16,12 +16,15 @@ export default function App() {
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(0.4);
   const [grain, setGrain] = useState(0.6);
+  // Centro / Anel 1 / Anel 2 sliders now represent SIZE (each one is the
+  // outer extent of its ring in canvas space). Nesting is enforced at
+  // render time — centro is clamped to anel 1's size, anel 1 to anel 2's.
   const [centroWeight, setCentroWeight] = useState(0.20);
-  const [centroFluidez, setCentroFluidez] = useState(0.45);
-  const [anel1Weight, setAnel1Weight] = useState(0.35);
-  const [anel1Fluidez, setAnel1Fluidez] = useState(0.5);
-  const [anel2Weight, setAnel2Weight] = useState(0.45);
-  const [anel2Fluidez, setAnel2Fluidez] = useState(0.55);
+  const [centroFluidez, setCentroFluidez] = useState(0.25);
+  const [anel1Weight, setAnel1Weight] = useState(0.45);
+  const [anel1Fluidez, setAnel1Fluidez] = useState(0.25);
+  const [anel2Weight, setAnel2Weight] = useState(0.70);
+  const [anel2Fluidez, setAnel2Fluidez] = useState(0.25);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
 

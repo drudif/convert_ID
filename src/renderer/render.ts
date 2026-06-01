@@ -4,12 +4,20 @@ import type { GradientStop, RenderParams } from '../types';
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
                                                   // produce the same field as 1 primary R
-const MINI_OFFSET_SCALE = 0.65;                   // spreads minis enough that each blob
-                                                  // grows multiple sub-peaks at high
-                                                  // irregularity (organic flowing shapes
-                                                  // like the user's references) while
-                                                  // Lorentzian smoothing keeps them
-                                                  // connected as one silhouette
+const MINI_OFFSET_SCALE = 0.65;                   // mini cluster spread at irregularity=1
+
+// Field threshold range. The Lorentzian field per mini peaks at 1; with 8
+// minis per blob and multi-blob compositions, totalField reaches ~5–8 at
+// dense cluster cores, ~0.3–1 in cluster outskirts. These bounds give the
+// size sliders a useful spatial range.
+const FIELD_THR_MAX = 4.5;   // size=0 → very small ring
+const FIELD_THR_MIN = 0.06;  // size=1 → ring covers most of the canvas
+
+function sizeToThreshold(size: number): number {
+  // Log-ish mapping: small slider changes near 0 produce big size changes
+  // (small thresholds compress the bottom of the range visually).
+  return FIELD_THR_MIN * Math.pow(FIELD_THR_MAX / FIELD_THR_MIN, 1 - size);
+}
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
@@ -20,94 +28,10 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
-// Kept exported for backward compatibility with existing tests, and as a
-// general helper for future palette transforms. Per-band weights subsume
-// its role in the heat-map pipeline.
+// Kept exported for compatibility with existing tests.
 export function applyHardness(stops: GradientStop[], hardness: number): GradientStop[] {
   const factor = 1 - hardness;
   return stops.map((s) => ({ ...s, offset: s.offset * factor }));
-}
-
-// Apply per-band weights to a 4-stop gradient. The sliders are normalised
-// to their SUM so each one represents its band's share of the LUT [0..1]
-// — three symmetric sliders, each behaves the same way. Without
-// normalisation the cumulative offsets cap at 1 (because the LUT can't
-// extend further) which makes later sliders feel different from Centro.
-// Silhouette size is the Fluidez slider's job, not these.
-function applyBandWeights(
-  stops: GradientStop[],
-  centroW: number,
-  anel1W: number,
-  anel2W: number,
-): GradientStop[] {
-  if (stops.length !== 4) return stops; // only the standard 4-stop palettes are weighted
-  const total = centroW + anel1W + anel2W;
-  if (total <= 0) return stops; // degenerate; leave stops untouched
-  const c = centroW / total;
-  const a1 = anel1W / total;
-  return [
-    { ...stops[0], offset: 0 },
-    { ...stops[1], offset: c },
-    { ...stops[2], offset: c + a1 },
-    { ...stops[3], offset: 1 },
-  ];
-}
-
-type GradientLut = {
-  r: Uint8ClampedArray;
-  g: Uint8ClampedArray;
-  b: Uint8ClampedArray;
-};
-
-function buildLut(stops: GradientStop[], bg: { r: number; g: number; b: number }): GradientLut {
-  const N = 256;
-  const r = new Uint8ClampedArray(N);
-  const g = new Uint8ClampedArray(N);
-  const b = new Uint8ClampedArray(N);
-  const rgbStops = stops.map((s) => ({ ...s, ...hexToRgb(s.color) }));
-
-  for (let i = 0; i < N; i++) {
-    const t = i / (N - 1);
-    let lo = rgbStops[0];
-    let hi = rgbStops[rgbStops.length - 1];
-    for (let k = 0; k < rgbStops.length - 1; k++) {
-      if (t >= rgbStops[k].offset && t <= rgbStops[k + 1].offset) {
-        lo = rgbStops[k];
-        hi = rgbStops[k + 1];
-        break;
-      }
-    }
-    if (t <= rgbStops[0].offset) { lo = hi = rgbStops[0]; }
-    if (t >= rgbStops[rgbStops.length - 1].offset) { lo = hi = rgbStops[rgbStops.length - 1]; }
-
-    const span = hi.offset - lo.offset;
-    const f = span > 0 ? (t - lo.offset) / span : 0;
-    r[i] = lo.r + (hi.r - lo.r) * f;
-    g[i] = lo.g + (hi.g - lo.g) * f;
-    b[i] = lo.b + (hi.b - lo.b) * f;
-  }
-
-  // If the last stop is a fade marker (α<0.05), fade from the last visible
-  // stop's colour to background over the remainder of the LUT — so Dureza-
-  // equivalent compression (low band weights) yields a smooth fade band
-  // rather than a slab of one colour.
-  const lastStop = rgbStops[rgbStops.length - 1];
-  if (lastStop.alpha < 0.05) {
-    let lastVisible = rgbStops[0];
-    for (let i = rgbStops.length - 1; i >= 0; i--) {
-      if (rgbStops[i].alpha > 0.05) { lastVisible = rgbStops[i]; break; }
-    }
-    const cutoff = Math.round(lastVisible.offset * (N - 1));
-    const span = (N - 1) - cutoff;
-    for (let i = cutoff + 1; i < N; i++) {
-      const t = span > 0 ? (i - cutoff) / span : 1;
-      r[i] = lastVisible.r * (1 - t) + bg.r * t;
-      g[i] = lastVisible.g * (1 - t) + bg.g * t;
-      b[i] = lastVisible.b * (1 - t) + bg.b * t;
-    }
-  }
-
-  return { r, g, b };
 }
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
@@ -133,19 +57,37 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   targetCtx.fillStyle = palette.background;
   targetCtx.fillRect(0, 0, width, height);
 
-  // 2. Palette LUT. Per-band weights position the 4 stops on the LUT, then
-  // the buildLut fade-to-bg extension handles the unused tail (sum < 1).
-  const weightedStops = applyBandWeights(
-    palette.blobVariants[0].stops,
-    centroWeight, anel1Weight, anel2Weight,
-  );
-  const lut = buildLut(weightedStops, bg);
+  // 2. Resolve effective sizes with nesting clamps:
+  //    centro is limited (capped) by anel1; anel1 by anel2; anel2 unconstrained.
+  //    The slider value represents desired size; the rendered ring can't be
+  //    larger than the next ring out.
+  const effA2 = anel2Weight;
+  const effA1 = Math.min(anel1Weight, effA2);
+  const effC = Math.min(centroWeight, effA1);
 
-  // 3. Pre-compute per-blob field params. Each blob is N identical "mini"
-  // sources; at irregularity=0 they all sit at the blob centre and their
-  // combined field equals one R-radius blob. As irregularity rises the
-  // minis drift apart within MINI_OFFSET_SCALE·baseR — same total field
-  // mass, asymmetric distribution → wavy silhouette but one warm centroid.
+  // 3. Per-ring field thresholds (size → outer threshold of that ring).
+  //    Higher size = lower threshold = bigger spatial coverage.
+  const centroThr = sizeToThreshold(effC);
+  const anel1Thr = sizeToThreshold(effA1);
+  const anel2Thr = sizeToThreshold(effA2);
+
+  // 4. Per-ring boundary blur (smoothstep band width).
+  //    The width scales with fluidez and with the threshold itself, so the
+  //    blur is meaningful at both small and large rings. A small constant
+  //    is always present so even fluidez=0 has a 1px-ish soft edge.
+  const centroBand = Math.max(0.005, centroFluidez * centroThr * 1.2);
+  const anel1Band = Math.max(0.005, anel1Fluidez * anel1Thr * 1.2);
+  const anel2Band = Math.max(0.005, anel2Fluidez * anel2Thr * 1.2);
+
+  // 5. Palette colours. Layered rendering: bg → Anel 2 → Anel 1 → Centro.
+  //    Stops 0..2 are the visible ring colours; stop 3 (Borda) is unused
+  //    in this model.
+  const variant = palette.blobVariants[0];
+  const cColor = hexToRgb(variant.stops[0].color);
+  const a1Color = hexToRgb(variant.stops[1].color);
+  const a2Color = hexToRgb(variant.stops[2].color);
+
+  // 6. Pre-compute per-blob field params.
   const minDim = Math.min(width, height);
   const offsetScale = MINI_OFFSET_SCALE * irregularity;
   const blobs = composition.blobs.map((b) => {
@@ -164,31 +106,11 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     return { miniRSq, minis };
   });
 
-  // 4. Per-ring field thresholds. Each fluidez controls how far its ring
-  // extends in space — lower threshold means more canvas area covered by
-  // that colour. The Anel 1 and Anel 2 thresholds are *fractions* of the
-  // preceding ring's threshold, so the rings are always properly nested
-  // (centroThr > anel1Thr > anel2Thr) regardless of slider combinations.
-  const centroThr = Math.max(0.02, 1.0 - centroFluidez * 0.95);
-  const anel1Thr = Math.max(0.01, centroThr * (1.0 - anel1Fluidez * 0.95));
-  const anel2Thr = Math.max(0.005, anel1Thr * (1.0 - anel2Fluidez * 0.95));
-  const edgeBand = Math.max(0.005, anel2Thr * 0.15);
-  const edgeLo = Math.max(0.001, anel2Thr - edgeBand);
-  const edgeHi = anel2Thr + edgeBand;
-
-  // Normalised weights → LUT stop positions for colour blending only
-  // (no effect on spatial extent — that's per-ring fluidez's job).
-  const totalW = centroWeight + anel1Weight + anel2Weight;
-  const safeTotal = totalW > 0 ? totalW : 1;
-  const o1 = centroWeight / safeTotal;             // Centro / Anel 1 boundary
-  const o2 = (centroWeight + anel1Weight) / safeTotal; // Anel 1 / Anel 2 boundary
-
-  // 5. Per-pixel evaluation. Per-mini contribution uses miniRSq as the
-  // denominator smoothing instead of a tiny EPS — i.e. a Lorentzian bump
-  // miniRSq/(d²+miniRSq) instead of pure 1/d². Peak per mini is bounded
-  // at 1, so the field across the cluster is smooth and the heat map
-  // shows the cluster's centroid as a single warm peak instead of N
-  // distinct hot dots at every mini centre.
+  // 7. Per-pixel evaluation. For each pixel compute the metaball field,
+  //    then three smoothstep "presence" values — one per ring — and
+  //    composite the ring colours onto the bg in order Anel 2 → Anel 1 →
+  //    Centro. Each ring's boundary smoothness is the corresponding
+  //    fluidez (independent blur per ring).
   const img = targetCtx.getImageData(0, 0, width, height);
   const data = img.data;
   const nBlobs = blobs.length;
@@ -207,43 +129,34 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
         }
       }
 
-      const inside = smoothstep(edgeLo, edgeHi, totalField);
-      if (inside <= 0) continue;
+      // Anel 2 presence is also the silhouette alpha.
+      const a2b = smoothstep(anel2Thr - anel2Band, anel2Thr + anel2Band, totalField);
+      if (a2b <= 0) continue;
 
-      // Field → LUT offset using per-ring thresholds.
-      // Within each ring's field range, linearly interpolate the colour
-      // toward the next ring's stop position in the LUT.
-      let heatOffset: number;
-      if (totalField >= centroThr) {
-        // Centro region: saturate toward LUT[0] as field grows beyond centroThr.
-        heatOffset = o1 * (centroThr / totalField);
-      } else if (totalField >= anel1Thr) {
-        // Centro → Anel 1 transition (offset o1 → o2 sort of — actually o1 to o2 represents Anel 1 colour band)
-        // Wait: at centroThr we're at boundary between Centro and Anel 1 → offset = o1
-        // at anel1Thr we're at boundary between Anel 1 and Anel 2 → offset = o2
-        const t = (centroThr - totalField) / (centroThr - anel1Thr);
-        heatOffset = o1 + t * (o2 - o1);
-      } else {
-        // Anel 2 region: at anel1Thr offset = o2; at anel2Thr offset = 1 (LUT edge).
-        const t = (anel1Thr - totalField) / (anel1Thr - anel2Thr);
-        heatOffset = o2 + t * (1 - o2);
-      }
-      if (heatOffset > 1) heatOffset = 1;
-      else if (heatOffset < 0) heatOffset = 0;
-      const lutIdx = (heatOffset * 255) | 0;
+      const a1b = smoothstep(anel1Thr - anel1Band, anel1Thr + anel1Band, totalField);
+      const cb = smoothstep(centroThr - centroBand, centroThr + centroBand, totalField);
 
-      const a = inside;
-      const ia = 1 - a;
+      // Layered blend: bg → Anel 2 → Anel 1 → Centro
+      let r = bg.r * (1 - a2b) + a2Color.r * a2b;
+      let g = bg.g * (1 - a2b) + a2Color.g * a2b;
+      let bl = bg.b * (1 - a2b) + a2Color.b * a2b;
+      r = r * (1 - a1b) + a1Color.r * a1b;
+      g = g * (1 - a1b) + a1Color.g * a1b;
+      bl = bl * (1 - a1b) + a1Color.b * a1b;
+      r = r * (1 - cb) + cColor.r * cb;
+      g = g * (1 - cb) + cColor.g * cb;
+      bl = bl * (1 - cb) + cColor.b * cb;
+
       const idx = (y * width + x) << 2;
-      data[idx]     = lut.r[lutIdx] * a + bg.r * ia;
-      data[idx + 1] = lut.g[lutIdx] * a + bg.g * ia;
-      data[idx + 2] = lut.b[lutIdx] * a + bg.b * ia;
+      data[idx]     = r;
+      data[idx + 1] = g;
+      data[idx + 2] = bl;
       data[idx + 3] = 255;
     }
   }
 
   targetCtx.putImageData(img, 0, 0);
 
-  // 6. Grain overlay
+  // 8. Grain overlay
   applyGrain(target, grain);
 }
