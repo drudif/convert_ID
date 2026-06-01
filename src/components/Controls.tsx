@@ -53,15 +53,32 @@ type Props = {
   onDownload: () => void;
 };
 
-const CUSTOM_SLOT_LABELS = ['Fundo', 'º0', 'º1', 'º2', 'º3', 'º4', 'Borda'];
-
 function clampDim(n: number): number {
   if (!Number.isFinite(n) || n < 1) return 1;
   if (n > MAX_DIM) return MAX_DIM;
   return Math.round(n);
 }
 
+function ringColorsFor(
+  paletteId: string,
+  customColors: string[],
+): { fundo: string; rings: string[] } {
+  if (paletteId === 'custom') {
+    // customColors = [Fundo, º0, º1, º2, º3, º4, Borda]
+    return { fundo: customColors[0], rings: customColors.slice(1) };
+  }
+  const palette = PALETTES.find((p) => p.id === paletteId);
+  if (!palette) return { fundo: customColors[0], rings: customColors.slice(1) };
+  const bg = palette.background;
+  const stops = palette.blobVariants[0].stops;
+  const rings = stops.map((s) => (s.alpha < 0.05 ? bg : s.color));
+  return { fundo: bg, rings };
+}
+
 export function Controls(props: Props) {
+  const isCustom = props.paletteId === 'custom';
+  const colors = ringColorsFor(props.paletteId, props.customColors);
+
   return (
     <aside style={{
       width: 320,
@@ -129,31 +146,24 @@ export function Controls(props: Props) {
             Custom
           </button>
         </div>
-        {props.paletteId === 'custom' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-            {CUSTOM_SLOT_LABELS.map((label, idx) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>{label}</label>
-                <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>
-                  {props.customColors[idx]}
-                </span>
-                <input
-                  type="color"
-                  value={props.customColors[idx]}
-                  onChange={(e) => props.onCustomColorChange(idx, e.target.value)}
-                  style={{
-                    width: 36,
-                    height: 24,
-                    border: '1px solid #2a2a30',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{ marginTop: 12 }}>
+          {isCustom ? (
+            <ColorRow
+              label="Fundo"
+              color={colors.fundo}
+              onChange={(c) => props.onCustomColorChange(0, c)}
+            />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>Fundo</label>
+              <span style={hexStyle}>{colors.fundo}</span>
+              <span
+                style={{ ...colorSwatchStyle, background: colors.fundo, cursor: 'default' }}
+                aria-hidden
+              />
+            </div>
+          )}
+        </div>
       </section>
 
       <Slider
@@ -180,110 +190,150 @@ export function Controls(props: Props) {
         value={props.grain}
         onChange={props.onGrainChange}
       />
-      <Slider
+
+      <RingBlock
         label="º0"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring0Weight}
-        onChange={props.onRing0WeightChange}
+        isCustom={isCustom}
+        color={colors.rings[0]}
+        onColorChange={(c) => props.onCustomColorChange(1, c)}
+        weight={props.ring0Weight}
+        fluidez={props.ring0Fluidez}
+        onWeightChange={props.onRing0WeightChange}
+        onFluidezChange={props.onRing0FluidezChange}
       />
-      <Slider
-        label="Fluidez º0"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring0Fluidez}
-        onChange={props.onRing0FluidezChange}
-      />
-      <Slider
+      <RingBlock
         label="º1"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring1Weight}
-        onChange={props.onRing1WeightChange}
+        isCustom={isCustom}
+        color={colors.rings[1]}
+        onColorChange={(c) => props.onCustomColorChange(2, c)}
+        weight={props.ring1Weight}
+        fluidez={props.ring1Fluidez}
+        onWeightChange={props.onRing1WeightChange}
+        onFluidezChange={props.onRing1FluidezChange}
       />
-      <Slider
-        label="Fluidez º1"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring1Fluidez}
-        onChange={props.onRing1FluidezChange}
-      />
-      <Slider
+      <RingBlock
         label="º2"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring2Weight}
-        onChange={props.onRing2WeightChange}
+        isCustom={isCustom}
+        color={colors.rings[2]}
+        onColorChange={(c) => props.onCustomColorChange(3, c)}
+        weight={props.ring2Weight}
+        fluidez={props.ring2Fluidez}
+        onWeightChange={props.onRing2WeightChange}
+        onFluidezChange={props.onRing2FluidezChange}
       />
-      <Slider
-        label="Fluidez º2"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring2Fluidez}
-        onChange={props.onRing2FluidezChange}
-      />
-      <Slider
+      <RingBlock
         label="º3"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring3Weight}
-        onChange={props.onRing3WeightChange}
+        isCustom={isCustom}
+        color={colors.rings[3]}
+        onColorChange={(c) => props.onCustomColorChange(4, c)}
+        weight={props.ring3Weight}
+        fluidez={props.ring3Fluidez}
+        onWeightChange={props.onRing3WeightChange}
+        onFluidezChange={props.onRing3FluidezChange}
       />
-      <Slider
-        label="Fluidez º3"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring3Fluidez}
-        onChange={props.onRing3FluidezChange}
-      />
-      <Slider
+      <RingBlock
         label="º4"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring4Weight}
-        onChange={props.onRing4WeightChange}
+        isCustom={isCustom}
+        color={colors.rings[4]}
+        onColorChange={(c) => props.onCustomColorChange(5, c)}
+        weight={props.ring4Weight}
+        fluidez={props.ring4Fluidez}
+        onWeightChange={props.onRing4WeightChange}
+        onFluidezChange={props.onRing4FluidezChange}
       />
-      <Slider
-        label="Fluidez º4"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.ring4Fluidez}
-        onChange={props.onRing4FluidezChange}
-      />
-      <Slider
+      <RingBlock
         label="Borda"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.bordaWeight}
-        onChange={props.onBordaWeightChange}
-      />
-      <Slider
-        label="Fluidez Borda"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.bordaFluidez}
-        onChange={props.onBordaFluidezChange}
+        isCustom={isCustom}
+        color={colors.rings[5]}
+        onColorChange={(c) => props.onCustomColorChange(6, c)}
+        weight={props.bordaWeight}
+        fluidez={props.bordaFluidez}
+        onWeightChange={props.onBordaWeightChange}
+        onFluidezChange={props.onBordaFluidezChange}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 24 }}>
         <button onClick={props.onRandomize} style={buttonStyle}>↻ Randomize</button>
         <button onClick={props.onDownload} style={{ ...buttonStyle, background: '#6b46c1' }}>
           ⬇ Baixar PNG
         </button>
       </div>
     </aside>
+  );
+}
+
+function RingBlock(props: {
+  label: string;
+  isCustom: boolean;
+  color: string;
+  onColorChange: (c: string) => void;
+  weight: number;
+  fluidez: number;
+  onWeightChange: (w: number) => void;
+  onFluidezChange: (f: number) => void;
+}) {
+  return (
+    <section style={ringBlockStyle}>
+      <header style={ringHeaderStyle}>
+        <span style={ringNameStyle}>{props.label}</span>
+        {props.isCustom && (
+          <>
+            <span style={hexStyle}>{props.color}</span>
+            <input
+              type="color"
+              value={props.color}
+              onChange={(e) => props.onColorChange(e.target.value)}
+              style={colorSwatchStyle}
+            />
+          </>
+        )}
+        {!props.isCustom && (
+          <span
+            style={{
+              ...colorSwatchStyle,
+              background: props.color,
+              cursor: 'default',
+            }}
+            aria-hidden
+          />
+        )}
+      </header>
+      <Slider
+        label="Tamanho"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.weight}
+        onChange={props.onWeightChange}
+      />
+      <Slider
+        label="Fluidez"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.fluidez}
+        onChange={props.onFluidezChange}
+      />
+    </section>
+  );
+}
+
+function ColorRow(props: {
+  label: string;
+  color: string;
+  onChange: (c: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>{props.label}</label>
+      <span style={hexStyle}>{props.color}</span>
+      <input
+        type="color"
+        value={props.color}
+        onChange={(e) => props.onChange(e.target.value)}
+        style={colorSwatchStyle}
+      />
+    </div>
   );
 }
 
@@ -296,10 +346,12 @@ function Slider(props: {
   onChange: (n: number) => void;
 }) {
   return (
-    <section style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <label style={labelStyle}>{props.label}</label>
-        <span style={{ color: '#9ca3af' }}>{props.value}</span>
+    <section style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <label style={{ ...labelStyle, marginBottom: 0, fontSize: 12, color: '#a8a8b0' }}>
+          {props.label}
+        </label>
+        <span style={{ color: '#9ca3af', fontSize: 12 }}>{props.value}</span>
       </div>
       <input
         type="range"
@@ -340,6 +392,47 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 500,
+};
+
+const ringBlockStyle: React.CSSProperties = {
+  marginTop: 16,
+  marginBottom: 4,
+  padding: '12px 12px 4px',
+  background: '#16161b',
+  border: '1px solid #25252c',
+  borderRadius: 6,
+};
+
+const ringHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 10,
+  paddingBottom: 8,
+  borderBottom: '1px solid #25252c',
+};
+
+const ringNameStyle: React.CSSProperties = {
+  flex: 1,
+  color: '#e5e5e5',
+  fontWeight: 600,
+  fontSize: 14,
+};
+
+const hexStyle: React.CSSProperties = {
+  color: '#9ca3af',
+  fontFamily: 'monospace',
+  fontSize: 11,
+};
+
+const colorSwatchStyle: React.CSSProperties = {
+  width: 28,
+  height: 22,
+  border: '1px solid #2a2a30',
+  background: 'transparent',
+  cursor: 'pointer',
+  padding: 0,
+  borderRadius: 3,
 };
 
 function chipStyle(active: boolean): React.CSSProperties {
