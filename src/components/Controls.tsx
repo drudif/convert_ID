@@ -113,7 +113,7 @@ export function Controls(props: Props) {
       fontFamily: 'system-ui, sans-serif',
       fontSize: 13,
     }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 20px' }}>Auragen</h1>
+      <h1 style={{ fontSize: 18, margin: '0 0 20px' }}>convert_ID_GEN</h1>
 
       <section style={{ marginBottom: 24 }}>
         <label style={labelStyle}>Modo</label>

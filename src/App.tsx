@@ -151,7 +151,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'auragen-paletas.json';
+    a.download = 'convert_ID_GEN-paletas.json';
     a.click();
     URL.revokeObjectURL(url);
   };

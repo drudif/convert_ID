@@ -7,7 +7,7 @@ export function exportFilename(
   width: number,
   height: number,
 ): string {
-  return `auragen-${paletteId}-${seed}-${width}x${height}.png`;
+  return `convert_ID_GEN-${paletteId}-${seed}-${width}x${height}.png`;
 }
 
 export async function exportPNG(params: RenderParams): Promise<void> {
