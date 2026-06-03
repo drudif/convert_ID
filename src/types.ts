@@ -44,13 +44,23 @@ export type Composition = {
   blobs: CompositionBlob[];
 };
 
+export type RenderMode = 'heatmap' | 'mesh';
+export type MeshColorMode = 'solid' | 'palette';
+
 export type RenderParams = {
   width: number;
   height: number;
   palette: Palette;
   composition: Composition;
+  mode: RenderMode;       // 'heatmap' = filled blobs; 'mesh' = topographic contours
   grain: number;          // 0–1
   irregularity: number;   // 0–1; mini-cluster spread amplitude
+  // Mesh (contour) mode only — ignored in heatmap mode.
+  meshLevels: number;     // number of contour lines (line density)
+  meshLineWidth: number;  // stroke width in px
+  meshRelief: number;     // 0–1+; extends concentric contour lines outward
+  meshLineColor: string;  // hex; contour line colour (solid mode)
+  meshColorMode: MeshColorMode; // 'solid' = single ink; 'palette' = follow heatmap palette
   // Six nested rings (º0 innermost → Borda outermost = silhouette edge).
   // Each ring has a SIZE (spatial extent) and a FLUIDEZ (boundary blur).
   // Nesting is enforced at render time: each inner ring is clamped to the

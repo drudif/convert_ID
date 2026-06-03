@@ -1,8 +1,11 @@
 import { mulberry32 } from '../lib/prng';
 import type { Composition, CompositionBlob, Palette } from '../types';
 
-const RADIUS_MIN = 0.2;
-const RADIUS_MAX = 0.5;
+// Blob radius as a fraction of min(width, height). Kept deliberately small so
+// blobs read as discrete shapes on the background — even a handful (e.g. 4)
+// don't tile over and fully cover the canvas.
+const RADIUS_MIN = 0.12;
+const RADIUS_MAX = 0.28;
 const MINI_COUNT = 8; // identical field sources per blob — the cluster's centroid is
                       // the only visible peak even when they spread out at high
                       // irregularity, so no fragment can read as a separate hot dot

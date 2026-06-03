@@ -12,8 +12,10 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     height: 200,
     palette: nightfall,
     composition: generateComposition(1, 3, nightfall),
+    mode: 'heatmap',
     grain: 0.5,
     irregularity: 0,
+    meshLevels: 24, meshLineWidth: 1, meshRelief: 0.6, meshLineColor: '#ec4899', meshColorMode: 'solid',
     ring0Weight: 0.04, ring0Fluidez: 0.25,
     ring1Weight: 0.15, ring1Fluidez: 0.25,
     ring2Weight: 0.30, ring2Fluidez: 0.25,
@@ -63,6 +65,34 @@ describe('render', () => {
           composition: { seed: 0, blobs: [] },
         }),
       ),
+    ).not.toThrow();
+  });
+
+  it('renders mesh mode without throwing', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 200;
+    expect(() => render(canvas, makeParams({ mode: 'mesh' }))).not.toThrow();
+  });
+
+  it('renders mesh mode with 0 blobs', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 120;
+    canvas.height = 120;
+    expect(() =>
+      render(
+        canvas,
+        makeParams({ mode: 'mesh', width: 120, height: 120, composition: { seed: 7, blobs: [] } }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('renders mesh mode following the palette', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 200;
+    expect(() =>
+      render(canvas, makeParams({ mode: 'mesh', meshColorMode: 'palette' })),
     ).not.toThrow();
   });
 });

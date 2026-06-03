@@ -1,10 +1,18 @@
 import { applyGrain } from './grain';
+import { renderMesh } from './mesh';
 import type { GradientStop, RenderParams } from '../types';
 
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
                                                   // produce the same field as 1 primary R
 const MINI_OFFSET_SCALE = 0.65;                   // mini cluster spread at irregularity=1
+
+// º0 (the hot core) renders from a LESS-spread copy of the mini cluster, so its
+// field peak stays high as irregularity rises — the core keeps its irregular
+// distortion but no longer dilutes (fades/fragments) or grows. The other rings
+// still use the fully-spread field. 0 = core ignores irregularity (round core);
+// 1 = core spreads like everything else (the old, diluting behaviour).
+const RING0_SPREAD = 0.45;
 
 // Field threshold range. The Lorentzian field per mini peaks at 1; with 8
 // minis per blob and multi-blob compositions, totalField reaches ~5–8 at
@@ -48,6 +56,10 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 export function render(target: HTMLCanvasElement, params: RenderParams): void {
+  if (params.mode === 'mesh') {
+    renderMesh(target, params);
+    return;
+  }
   const {
     width, height, palette, composition,
     grain, irregularity,
@@ -77,17 +89,77 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   const eff1 = Math.min(ring1Weight, eff2);
   const eff0 = Math.min(ring0Weight, eff1);
 
-  // 3. Per-ring field thresholds (size → outer threshold of that ring).
+  // 3. Pre-compute per-blob field params (needed before thresholds so we can
+  //    measure the actual peak field of this composition).
+  const minDim = Math.min(width, height);
+  const offsetScale = MINI_OFFSET_SCALE * irregularity;
+  const blobs = composition.blobs.map((b) => {
+    const r = b.radius * minDim;
+    const miniR = r * MINI_R_SCALE;
+    const miniRSq = miniR * miniR;
+    const cx = b.x * width;
+    const cy = b.y * height;
+    const minis: { cx: number; cy: number }[] = [];
+    const coreMinis: { cx: number; cy: number }[] = [];
+    for (const m of b.harmonics.minis) {
+      const ox = m.ox * r * offsetScale;
+      const oy = m.oy * r * offsetScale;
+      minis.push({ cx: cx + ox, cy: cy + oy });
+      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+    }
+    return { miniRSq, minis, coreMinis };
+  });
+  const nBlobs = blobs.length;
+
+  // 4. Estimate the peak field on a coarse grid. The metaball field maxes out
+  //    around blob/cluster cores, but its exact peak depends on blob count,
+  //    radius and irregularity. A fixed threshold ceiling (e.g. 12 for ring 0)
+  //    can exceed that peak, so the innermost rings vanish entirely at low
+  //    sizes instead of shrinking to a tiny visible core. Clamping each
+  //    threshold to a fraction of the measured peak keeps every ring present.
+  let fieldMax = 0;
+  let coreFieldMax = 0;
+  const sampleStep = Math.max(1, Math.floor(minDim / 96));
+  for (let y = 0; y < height; y += sampleStep) {
+    for (let x = 0; x < width; x += sampleStep) {
+      let f = 0;
+      let cf = 0;
+      for (let i = 0; i < nBlobs; i++) {
+        const b = blobs[i];
+        const miniRSq = b.miniRSq;
+        for (let m = 0; m < b.minis.length; m++) {
+          const mini = b.minis[m];
+          const dx = x - mini.cx;
+          const dy = y - mini.cy;
+          f += miniRSq / (dx * dx + dy * dy + miniRSq);
+          const cm = b.coreMinis[m];
+          const cdx = x - cm.cx;
+          const cdy = y - cm.cy;
+          cf += miniRSq / (cdx * cdx + cdy * cdy + miniRSq);
+        }
+      }
+      if (f > fieldMax) fieldMax = f;
+      if (cf > coreFieldMax) coreFieldMax = cf;
+    }
+  }
+  // Coarse sampling slightly undershoots the true peak, so VISIBLE_FRACTION
+  // can sit close to 1 and still guarantee a few real pixels clear the
+  // threshold — a minimal but always-present core at size 0.
+  const thrCeil = fieldMax * 0.95;
+  const coreThrCeil = coreFieldMax * 0.95;
+
+  // 5. Per-ring field thresholds (size → outer threshold of that ring).
   //    Higher size = lower threshold = bigger spatial coverage. Rings 0 and 1
   //    use a steeper mapping so they can shrink to near-invisible at slider=0.
-  const thr0 = sizeToThreshold(eff0, FIELD_THR_MAX_R0);
-  const thr1 = sizeToThreshold(eff1, FIELD_THR_MAX_R1);
-  const thr2 = sizeToThreshold(eff2);
-  const thr3 = sizeToThreshold(eff3);
-  const thr4 = sizeToThreshold(eff4);
-  const thrB = sizeToThreshold(effB);
+  //    Each is capped at thrCeil so it can never exceed the achievable field.
+  const thr0 = Math.min(sizeToThreshold(eff0, FIELD_THR_MAX_R0), coreThrCeil);
+  const thr1 = Math.min(sizeToThreshold(eff1, FIELD_THR_MAX_R1), thrCeil);
+  const thr2 = Math.min(sizeToThreshold(eff2), thrCeil);
+  const thr3 = Math.min(sizeToThreshold(eff3), thrCeil);
+  const thr4 = Math.min(sizeToThreshold(eff4), thrCeil);
+  const thrB = Math.min(sizeToThreshold(effB), thrCeil);
 
-  // 4. Per-ring boundary blur widths (smoothstep band, scales with the
+  // 6. Per-ring boundary blur widths (smoothstep band, scales with the
   //    ring's threshold so the blur is meaningful at both small and large
   //    rings). A small floor ensures even fluidez=0 has a sub-pixel soft edge.
   const band0 = Math.max(0.005, ring0Fluidez * thr0 * 1.2);
@@ -112,33 +184,13 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     ? bg
     : hexToRgb(variant.stops[5].color);
 
-  // 6. Pre-compute per-blob field params.
-  const minDim = Math.min(width, height);
-  const offsetScale = MINI_OFFSET_SCALE * irregularity;
-  const blobs = composition.blobs.map((b) => {
-    const r = b.radius * minDim;
-    const miniR = r * MINI_R_SCALE;
-    const miniRSq = miniR * miniR;
-    const cx = b.x * width;
-    const cy = b.y * height;
-    const minis: { cx: number; cy: number }[] = [];
-    for (const m of b.harmonics.minis) {
-      minis.push({
-        cx: cx + m.ox * r * offsetScale,
-        cy: cy + m.oy * r * offsetScale,
-      });
-    }
-    return { miniRSq, minis };
-  });
-
-  // 7. Per-pixel evaluation. For each pixel compute the metaball field,
+  // 8. Per-pixel evaluation. For each pixel compute the metaball field,
   //    then three smoothstep "presence" values — one per ring — and
   //    composite the ring colours onto the bg in order Anel 2 → Anel 1 →
   //    Centro. Each ring's boundary smoothness is the corresponding
   //    fluidez (independent blur per ring).
   const img = targetCtx.getImageData(0, 0, width, height);
   const data = img.data;
-  const nBlobs = blobs.length;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -162,7 +214,21 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       const b3 = smoothstep(thr3 - band3, thr3 + band3, totalField);
       const b2 = smoothstep(thr2 - band2, thr2 + band2, totalField);
       const b1 = smoothstep(thr1 - band1, thr1 + band1, totalField);
-      const b0 = smoothstep(thr0 - band0, thr0 + band0, totalField);
+
+      // º0 uses the less-spread core field so it stays compact and bright as
+      // irregularity rises, instead of diluting with the fully-spread field.
+      let coreField = 0;
+      for (let i = 0; i < nBlobs; i++) {
+        const b = blobs[i];
+        const miniRSq = b.miniRSq;
+        for (let m = 0; m < b.coreMinis.length; m++) {
+          const cm = b.coreMinis[m];
+          const dx = x - cm.cx;
+          const dy = y - cm.cy;
+          coreField += miniRSq / (dx * dx + dy * dy + miniRSq);
+        }
+      }
+      const b0 = smoothstep(thr0 - band0, thr0 + band0, coreField);
 
       // Layered blend: bg → Borda → º4 → º3 → º2 → º1 → º0 (innermost on top)
       let r = bg.r * (1 - bB) + cB.r * bB;

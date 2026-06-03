@@ -32,11 +32,11 @@ describe('generateComposition', () => {
     }
   });
 
-  it('radius is in [0.2, 0.5]', () => {
+  it('radius is in [0.12, 0.28]', () => {
     const comp = generateComposition(7, 8, nightfall);
     for (const b of comp.blobs) {
-      expect(b.radius).toBeGreaterThanOrEqual(0.2);
-      expect(b.radius).toBeLessThanOrEqual(0.5);
+      expect(b.radius).toBeGreaterThanOrEqual(0.12);
+      expect(b.radius).toBeLessThanOrEqual(0.28);
     }
   });
 

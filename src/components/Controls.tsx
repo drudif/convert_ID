@@ -1,5 +1,7 @@
-import type { Palette } from '../types';
+import { useRef } from 'react';
+import type { MeshColorMode, Palette, RenderMode } from '../types';
 import { PALETTES } from '../data/palettes';
+import type { SavedPalette } from '../data/savedPalettes';
 
 const MAX_DIM = 3840;
 
@@ -15,9 +17,16 @@ type Props = {
   height: number;
   paletteId: string;
   customColors: [string, string, string, string, string, string, string];
+  savedPalettes: SavedPalette[];
+  mode: RenderMode;
   blobCount: number;
   irregularity: number;
   grain: number;
+  meshLevels: number;
+  meshLineWidth: number;
+  meshRelief: number;
+  meshLineColor: string;
+  meshColorMode: MeshColorMode;
   ring0Weight: number;
   ring0Fluidez: number;
   ring1Weight: number;
@@ -34,9 +43,19 @@ type Props = {
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
   onCustomColorChange: (idx: number, color: string) => void;
+  onSavePalette: () => void;
+  onDeletePalette: (id: string) => void;
+  onExportPalettes: () => void;
+  onImportPalettes: (file: File) => void;
+  onModeChange: (m: RenderMode) => void;
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
+  onMeshLevelsChange: (n: number) => void;
+  onMeshLineWidthChange: (w: number) => void;
+  onMeshReliefChange: (r: number) => void;
+  onMeshLineColorChange: (c: string) => void;
+  onMeshColorModeChange: (m: MeshColorMode) => void;
   onRing0WeightChange: (w: number) => void;
   onRing0FluidezChange: (f: number) => void;
   onRing1WeightChange: (w: number) => void;
@@ -62,11 +81,14 @@ function clampDim(n: number): number {
 function ringColorsFor(
   paletteId: string,
   customColors: string[],
+  savedPalettes: SavedPalette[],
 ): { fundo: string; rings: string[] } {
   if (paletteId === 'custom') {
     // customColors = [Fundo, º0, º1, º2, º3, º4, Borda]
     return { fundo: customColors[0], rings: customColors.slice(1) };
   }
+  const saved = savedPalettes.find((p) => p.id === paletteId);
+  if (saved) return { fundo: saved.colors[0], rings: saved.colors.slice(1) };
   const palette = PALETTES.find((p) => p.id === paletteId);
   if (!palette) return { fundo: customColors[0], rings: customColors.slice(1) };
   const bg = palette.background;
@@ -77,7 +99,8 @@ function ringColorsFor(
 
 export function Controls(props: Props) {
   const isCustom = props.paletteId === 'custom';
-  const colors = ringColorsFor(props.paletteId, props.customColors);
+  const colors = ringColorsFor(props.paletteId, props.customColors, props.savedPalettes);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <aside style={{
@@ -91,6 +114,24 @@ export function Controls(props: Props) {
       fontSize: 13,
     }}>
       <h1 style={{ fontSize: 18, margin: '0 0 20px' }}>Auragen</h1>
+
+      <section style={{ marginBottom: 24 }}>
+        <label style={labelStyle}>Modo</label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => props.onModeChange('heatmap')}
+            style={chipStyle(props.mode === 'heatmap')}
+          >
+            Heat map
+          </button>
+          <button
+            onClick={() => props.onModeChange('mesh')}
+            style={chipStyle(props.mode === 'mesh')}
+          >
+            Mesh
+          </button>
+        </div>
+      </section>
 
       <section style={{ marginBottom: 24 }}>
         <label style={labelStyle}>Resolução</label>
@@ -145,7 +186,57 @@ export function Controls(props: Props) {
           >
             Custom
           </button>
+          {props.savedPalettes.map((sp) => {
+            const active = props.paletteId === sp.id;
+            return (
+              <span key={sp.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, ...chipStyle(active) }}>
+                <button
+                  onClick={() => props.onPaletteChange(sp.id)}
+                  style={{ all: 'unset', cursor: 'pointer' }}
+                >
+                  {sp.name}
+                </button>
+                <button
+                  onClick={() => props.onDeletePalette(sp.id)}
+                  title="Apagar paleta"
+                  style={{ all: 'unset', cursor: 'pointer', opacity: 0.6, fontWeight: 700, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
         </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {isCustom && (
+            <button onClick={props.onSavePalette} style={chipStyle(false)}>
+              💾 Salvar paleta
+            </button>
+          )}
+          <button
+            onClick={props.onExportPalettes}
+            disabled={!props.savedPalettes.length}
+            style={{ ...chipStyle(false), opacity: props.savedPalettes.length ? 1 : 0.4 }}
+          >
+            ⬆ Exportar
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} style={chipStyle(false)}>
+            ⬇ Importar
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) props.onImportPalettes(f);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
         <div style={{ marginTop: 12 }}>
           {isCustom ? (
             <ColorRow
@@ -191,6 +282,60 @@ export function Controls(props: Props) {
         onChange={props.onGrainChange}
       />
 
+      {props.mode === 'mesh' && (
+        <>
+          <Slider
+            label="Densidade de linhas"
+            min={4}
+            max={80}
+            step={1}
+            value={props.meshLevels}
+            onChange={props.onMeshLevelsChange}
+          />
+          <Slider
+            label="Espessura"
+            min={0.4}
+            max={3}
+            step={0.1}
+            value={props.meshLineWidth}
+            onChange={props.onMeshLineWidthChange}
+          />
+          <Slider
+            label="Relevo extra"
+            min={0}
+            max={1.5}
+            step={0.01}
+            value={props.meshRelief}
+            onChange={props.onMeshReliefChange}
+          />
+          <section style={{ marginTop: 8 }}>
+            <label style={labelStyle}>Cor da linha</label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <button
+                onClick={() => props.onMeshColorModeChange('solid')}
+                style={chipStyle(props.meshColorMode === 'solid')}
+              >
+                Sólida
+              </button>
+              <button
+                onClick={() => props.onMeshColorModeChange('palette')}
+                style={chipStyle(props.meshColorMode === 'palette')}
+              >
+                Seguir paleta
+              </button>
+            </div>
+            {props.meshColorMode === 'solid' && (
+              <ColorRow
+                label="Cor"
+                color={props.meshLineColor}
+                onChange={props.onMeshLineColorChange}
+              />
+            )}
+          </section>
+        </>
+      )}
+
+      {props.mode === 'heatmap' && (<>
       <RingBlock
         label="º0"
         isCustom={isCustom}
@@ -251,6 +396,7 @@ export function Controls(props: Props) {
         onWeightChange={props.onBordaWeightChange}
         onFluidezChange={props.onBordaFluidezChange}
       />
+      </>)}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 24 }}>
         <button onClick={props.onRandomize} style={buttonStyle}>↻ Randomize</button>
