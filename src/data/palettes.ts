@@ -55,6 +55,92 @@ export const PALETTES: Palette[] = [
       },
     ],
   },
+  // Extra presets — peculiar names across PT / ES / EN.
+  {
+    id: 'quasar',
+    name: 'Quasar',
+    background: '#0a0a1f',
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,   color: '#aef9ff', alpha: 1.0  }, // º0 icy cyan
+          { offset: 0.2, color: '#4cc9f0', alpha: 0.95 }, // º1 cyan
+          { offset: 0.4, color: '#7b2ff7', alpha: 0.85 }, // º2 violet
+          { offset: 0.6, color: '#f72585', alpha: 0.6  }, // º3 magenta
+          { offset: 0.8, color: '#240046', alpha: 0.4  }, // º4 deep purple
+          { offset: 1,   color: '#000000', alpha: 0    }, // Borda (fade)
+        ],
+      },
+    ],
+  },
+  {
+    id: 'brasa',
+    name: 'Brasa',
+    background: '#1a0805',
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,   color: '#ffe66d', alpha: 1.0  }, // º0 amarelo
+          { offset: 0.2, color: '#ff9f1c', alpha: 0.95 }, // º1 âmbar
+          { offset: 0.4, color: '#ff5400', alpha: 0.85 }, // º2 laranja-fogo
+          { offset: 0.6, color: '#c1121f', alpha: 0.6  }, // º3 vermelho
+          { offset: 0.8, color: '#5c0a0a', alpha: 0.4  }, // º4 bordô
+          { offset: 1,   color: '#000000', alpha: 0    }, // Borda (fade)
+        ],
+      },
+    ],
+  },
+  {
+    id: 'niebla',
+    name: 'Niebla',
+    background: '#1c1b29',
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,   color: '#fef9ef', alpha: 1.0  }, // º0 crema
+          { offset: 0.2, color: '#c6d8d3', alpha: 0.95 }, // º1 salvia
+          { offset: 0.4, color: '#8e9aaf', alpha: 0.85 }, // º2 azul pizarra
+          { offset: 0.6, color: '#cbc0d3', alpha: 0.6  }, // º3 lavanda gris
+          { offset: 0.8, color: '#4a4e69', alpha: 0.4  }, // º4 índigo apagado
+          { offset: 1,   color: '#000000', alpha: 0    }, // Borda (fade)
+        ],
+      },
+    ],
+  },
+  {
+    id: 'veludo',
+    name: 'Veludo',
+    background: '#14040f',
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,   color: '#ffd6e8', alpha: 1.0  }, // º0 rosa claro
+          { offset: 0.2, color: '#ff5d8f', alpha: 0.95 }, // º1 rosé
+          { offset: 0.4, color: '#c9184a', alpha: 0.85 }, // º2 carmim
+          { offset: 0.6, color: '#7b2cbf', alpha: 0.6  }, // º3 púrpura
+          { offset: 0.8, color: '#240046', alpha: 0.4  }, // º4 violeta profundo
+          { offset: 1,   color: '#000000', alpha: 0    }, // Borda (fade)
+        ],
+      },
+    ],
+  },
+  {
+    id: 'brine',
+    name: 'Brine',
+    background: '#04141a',
+    blobVariants: [
+      {
+        stops: [
+          { offset: 0,   color: '#d8f3dc', alpha: 1.0  }, // º0 mint
+          { offset: 0.2, color: '#52b788', alpha: 0.95 }, // º1 sea green
+          { offset: 0.4, color: '#2c7da0', alpha: 0.85 }, // º2 teal-blue
+          { offset: 0.6, color: '#1d3557', alpha: 0.6  }, // º3 navy
+          { offset: 0.8, color: '#081c2c', alpha: 0.4  }, // º4 deep tide
+          { offset: 1,   color: '#000000', alpha: 0    }, // Borda (fade)
+        ],
+      },
+    ],
+  },
   {
     id: 'nightfall',
     name: 'Nightfall',
