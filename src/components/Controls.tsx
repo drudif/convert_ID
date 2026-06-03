@@ -3,14 +3,31 @@ import type { MeshColorMode, Palette, RenderMode } from '../types';
 import { PALETTES } from '../data/palettes';
 import type { SavedPalette } from '../data/savedPalettes';
 
-const MAX_DIM = 3840;
+type Orientation = 'horizontal' | 'quadrado' | 'vertical';
+type Quality = '1080' | '4k';
 
-const RESOLUTION_PRESETS: Array<{ label: string; w: number; h: number }> = [
-  { label: '1080p',     w: 1920, h: 1080 },
-  { label: '4K',        w: 3840, h: 2160 },
-  { label: 'Quadrado',  w: 3840, h: 3840 },
-  { label: 'Vertical',  w: 2160, h: 3840 },
+// Final pixel dimensions per (quality, orientation). Horizontal/vertical are
+// exact 16:9 at each tier; square uses the tier's standard (short) side.
+const FORMAT_DIMS: Record<Quality, Record<Orientation, [number, number]>> = {
+  '1080': { horizontal: [1920, 1080], quadrado: [1080, 1080], vertical: [1080, 1920] },
+  '4k':   { horizontal: [3840, 2160], quadrado: [2160, 2160], vertical: [2160, 3840] },
+};
+
+const ORIENTATIONS: Array<{ id: Orientation; label: string }> = [
+  { id: 'horizontal', label: 'Horizontal' },
+  { id: 'quadrado', label: 'Quadrado' },
+  { id: 'vertical', label: 'Vertical' },
 ];
+
+function orientationOf(w: number, h: number): Orientation {
+  if (w > h) return 'horizontal';
+  if (w < h) return 'vertical';
+  return 'quadrado';
+}
+
+function qualityOf(w: number, h: number): Quality {
+  return Math.max(w, h) >= 3000 ? '4k' : '1080';
+}
 
 type Props = {
   width: number;
@@ -72,12 +89,6 @@ type Props = {
   onDownload: () => void;
 };
 
-function clampDim(n: number): number {
-  if (!Number.isFinite(n) || n < 1) return 1;
-  if (n > MAX_DIM) return MAX_DIM;
-  return Math.round(n);
-}
-
 function ringColorsFor(
   paletteId: string,
   customColors: string[],
@@ -101,6 +112,14 @@ export function Controls(props: Props) {
   const isCustom = props.paletteId === 'custom';
   const colors = ringColorsFor(props.paletteId, props.customColors, props.savedPalettes);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const orientation = orientationOf(props.width, props.height);
+  const quality = qualityOf(props.width, props.height);
+  const applyFormat = (o: Orientation, q: Quality) => {
+    const [w, h] = FORMAT_DIMS[q][o];
+    props.onWidthChange(w);
+    props.onHeightChange(h);
+  };
 
   return (
     <aside style={{
@@ -134,36 +153,33 @@ export function Controls(props: Props) {
       </section>
 
       <section style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Resolução</label>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <input
-            type="number"
-            min={1}
-            max={MAX_DIM}
-            value={props.width}
-            onChange={(e) => props.onWidthChange(clampDim(Number(e.target.value)))}
-            style={inputStyle}
-          />
-          <span style={{ alignSelf: 'center' }}>×</span>
-          <input
-            type="number"
-            min={1}
-            max={MAX_DIM}
-            value={props.height}
-            onChange={(e) => props.onHeightChange(clampDim(Number(e.target.value)))}
-            style={inputStyle}
-          />
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {RESOLUTION_PRESETS.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => { props.onWidthChange(p.w); props.onHeightChange(p.h); }}
-              style={chipStyle(props.width === p.w && props.height === p.h)}
-            >
-              {p.label}
-            </button>
-          ))}
+        <label style={labelStyle}>Formato</label>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={subLabelStyle}>Orientação</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ORIENTATIONS.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => applyFormat(o.id, quality)}
+                  style={chipStyle(orientation === o.id)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={subLabelStyle}>Qualidade</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => applyFormat(orientation, '1080')} style={chipStyle(quality === '1080')}>
+                1080
+              </button>
+              <button onClick={() => applyFormat(orientation, '4k')} style={chipStyle(quality === '4k')}>
+                4K
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -265,6 +281,9 @@ export function Controls(props: Props) {
         value={props.blobCount}
         onChange={props.onBlobCountChange}
       />
+      <button onClick={props.onRandomize} style={{ ...buttonStyle, width: '100%', marginBottom: 12 }}>
+        ↻ Randomize
+      </button>
       <Slider
         label="Irregularidade"
         min={0}
@@ -399,7 +418,6 @@ export function Controls(props: Props) {
       </>)}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 24 }}>
-        <button onClick={props.onRandomize} style={buttonStyle}>↻ Randomize</button>
         <button onClick={props.onDownload} style={{ ...buttonStyle, background: '#6b46c1' }}>
           ⬇ Baixar PNG
         </button>
@@ -519,14 +537,10 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '6px 8px',
-  background: '#1a1a1f',
-  border: '1px solid #2a2a30',
-  color: '#e5e5e5',
-  borderRadius: 4,
-  fontSize: 13,
+const subLabelStyle: React.CSSProperties = {
+  marginBottom: 6,
+  color: '#a8a8b0',
+  fontSize: 12,
 };
 
 const buttonStyle: React.CSSProperties = {

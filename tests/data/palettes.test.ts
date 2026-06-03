@@ -4,9 +4,9 @@ import { PALETTES, buildCustomPalette } from '../../src/data/palettes';
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 describe('palettes', () => {
-  it('exports 3 palettes: nightfall, eclipse, aurora', () => {
+  it('exports the brand + legacy palettes in order', () => {
     const ids = PALETTES.map((p) => p.id);
-    expect(ids).toEqual(['nightfall', 'eclipse', 'aurora']);
+    expect(ids).toEqual(['plasmodio', 'vacuo-lilas', 'hertz', 'nightfall', 'eclipse', 'aurora']);
   });
 
   it('each palette has a valid hex background and at least one variant', () => {

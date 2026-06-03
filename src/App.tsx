@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Controls } from './components/Controls';
-import { Preview } from './components/Preview';
+import { Preview, type Zoom } from './components/Preview';
 import { PALETTES, buildCustomPalette } from './data/palettes';
 import {
   loadSavedPalettes,
@@ -16,15 +16,15 @@ import { exportPNG } from './renderer/export';
 import type { MeshColorMode, RenderMode, RenderParams } from './types';
 
 export default function App() {
-  const [width, setWidth] = useState(1920);
-  const [height, setHeight] = useState(1080);
-  const [paletteId, setPaletteId] = useState('nightfall');
+  const [width, setWidth] = useState(3840);
+  const [height, setHeight] = useState(2160);
+  const [paletteId, setPaletteId] = useState('custom');
   const [customColors, setCustomColors] = useState<
     [string, string, string, string, string, string, string]
-  >(['#1a0d3d', '#ffd479', '#ff7a4d', '#ec4899', '#6b46c1', '#3a1d6d', '#1a0d3d']);
+  >(['#3a1c71', '#ff2ead', '#ff713a', '#9f75ff', '#4acbd6', '#3a1c71', '#3a1c71']);
   const [mode, setMode] = useState<RenderMode>('heatmap');
   const [blobCount, setBlobCount] = useState(5);
-  const [irregularity, setIrregularity] = useState(0.4);
+  const [irregularity, setIrregularity] = useState(1);
   // Grain is tracked per render mode so each keeps its own default and any
   // manual tweak survives toggling between Heat map and Mesh.
   const [grainHeatmap, setGrainHeatmap] = useState(0.25);
@@ -56,6 +56,7 @@ export default function App() {
   const [bordaFluidez, setBordaFluidez] = useState(0.25);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<Zoom>('fit');
   const [savedPalettes, setSavedPalettes] = useState<SavedPalette[]>(() => loadSavedPalettes());
 
   const palette = useMemo(() => {
@@ -242,12 +243,19 @@ export default function App() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         padding: 32,
         overflow: 'hidden',
         gap: 12,
       }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: '#a8a8b0', fontSize: 12 }}>Zoom</span>
+          <button onClick={() => setZoom('fit')} style={zoomChip(zoom === 'fit')}>
+            Fit
+          </button>
+          <button onClick={() => setZoom('100')} style={zoomChip(zoom === '100')}>
+            100%
+          </button>
+        </div>
         {exportError && (
           <p style={{
             color: '#fca5a5',
@@ -261,8 +269,20 @@ export default function App() {
             {exportError}
           </p>
         )}
-        <Preview params={params} />
+        <Preview params={params} zoom={zoom} />
       </main>
     </div>
   );
+}
+
+function zoomChip(active: boolean): React.CSSProperties {
+  return {
+    padding: '5px 12px',
+    background: active ? '#6b46c1' : '#1a1a1f',
+    color: active ? '#fff' : '#9ca3af',
+    border: '1px solid ' + (active ? '#6b46c1' : '#2a2a30'),
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 12,
+  };
 }
