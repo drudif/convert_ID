@@ -112,7 +112,7 @@ button{ font-family:inherit; }
   background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(255,255,255,.012) 6px,rgba(255,255,255,.012) 7px);
 }
 .sec-head .idx{ color:var(--ink-3);font-weight:700;font-size:10px; }
-.sec-head .ttl{ color:var(--ink);font-weight:600;font-size:10px;letter-spacing:.12em; }
+.sec-head .ttl{ color:var(--ink);font-weight:700;font-size:11px;letter-spacing:0;font-family:var(--disp);text-transform:lowercase; }
 .sec-head .meta{ margin-left:auto;color:var(--ink-3);font-size:9px;letter-spacing:.1em; }
 
 /* ============================================================
@@ -185,13 +185,13 @@ button{ font-family:inherit; }
 .zone-head{
   display:flex;align-items:center;gap:10px;
   padding:9px 12px;
-  border-top:3px solid var(--ink);
+  border-top:3px solid var(--accent);
   border-bottom:1px solid var(--line-2);
   background:var(--bg-2);
 }
 .zone-head .zn{
-  font-family:var(--disp);font-weight:800;font-size:14px;letter-spacing:.06em;
-  color:var(--ink);
+  font-family:var(--disp);font-weight:800;font-size:15px;letter-spacing:0;
+  color:var(--ink);text-transform:lowercase;
 }
 .zone-head .zsub{ font-size:9px;color:var(--ink-3);letter-spacing:.14em; }
 .zone-head .zix{
@@ -274,7 +274,9 @@ input[type="range"].slider-input:disabled{ cursor:default; }
   display:flex;align-items:center;justify-content:center;gap:7px;
 }
 .transport button:first-child{ border-left:none; }
-.transport button.play{ background:var(--accent);color:var(--accent-dk);font-weight:700; }
+.transport button.play{ background:var(--magenta);color:#1a0510;font-weight:700; }
+/* VÍDEO panel = magenta accents (vs cyan in IMAGEM) */
+.video-panel .seg button.on{ background:var(--magenta);color:#1a0510; }
 .transport button .ic{ font-size:12px; }
 
 /* generic buttons */
@@ -289,9 +291,23 @@ input[type="range"].slider-input:disabled{ cursor:default; }
 .btn.ghost{ background:transparent; }
 .btn.cta{ background:var(--magenta);color:#1a0510;border-color:var(--magenta);font-weight:700; }
 .btn.cta:hover{ border-color:#d96ba0; }
+/* IMAGEM primary action (Baixar PNG) = cyan */
+.btn.cta-img{ background:var(--accent);color:var(--accent-dk);border-color:var(--accent);font-weight:700; }
+.btn.cta-img:hover{ border-color:#6fd5de; }
 .btn.cta .ic{ font-size:12px; }
 .btn-grid{ display:grid;gap:8px; }
 .btn-grid.c2{ grid-template-columns:1fr 1fr; }
+
+/* Export progress: a colored fill grows left→right inside the button. */
+.btn.exporting{ position:relative; overflow:hidden; background:var(--bg); border-color:var(--line-2); }
+.btn.exporting .bar{
+  position:absolute; left:0; top:0; bottom:0; z-index:0;
+  background:#c8c8cc;
+  transition:width .12s linear;
+}
+.btn.exporting .txt{ position:relative; z-index:1; color:#fff; mix-blend-mode:difference; }
+.btn.cancel{ color:var(--magenta); border-color:var(--magenta); }
+.btn.cancel:hover{ background:rgba(255,46,173,.12); }
 
 /* mesh sub-block */
 .subnote{ font-size:9px;color:var(--ink-2);letter-spacing:.12em;margin:2px 0 8px;
@@ -358,7 +374,7 @@ input[type="range"].slider-input:disabled{ cursor:default; }
   padding:8px 12px;border-bottom:1px solid var(--line-2);
   background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(255,255,255,.012) 6px,rgba(255,255,255,.012) 7px);
 }
-.dock-head .dh-ttl{ font-family:var(--disp);font-weight:800;font-size:12px;letter-spacing:.1em;color:var(--ink);text-transform:uppercase; }
+.dock-head .dh-ttl{ font-family:var(--disp);font-weight:800;font-size:13px;letter-spacing:0;color:var(--ink);text-transform:lowercase; }
 .dock-head .dh-meta{ margin-left:auto;font-size:9px;color:var(--ink-3);letter-spacing:.12em; }
 .dock-body{ padding:12px;overflow:auto;flex:1; }
 .dock-pal .dock-body{ display:flex;flex-direction:column;gap:11px; }

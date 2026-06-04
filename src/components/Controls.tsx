@@ -42,8 +42,11 @@ export type ControlsProps = {
   playing: boolean;
   speed: number;
   videoProgress: { done: number; total: number } | null;
+  videoQuality: '1080' | '4k';
+  onVideoQualityChange: (q: '1080' | '4k') => void;
   onExportVideo: () => void;
   onExportPreview: () => void;
+  onCancelExport: () => void;
   morphAmp: number;
   meshFlow: number;
   meshFlowDir: 1 | -1;
@@ -229,7 +232,7 @@ export function ImagemPanel(props: ControlsProps) {
             </>
           )}
 
-          <button className="btn cta" style={{ marginTop: 14 }} onClick={props.onDownload}>
+          <button className="btn cta-img" style={{ marginTop: 14 }} onClick={props.onDownload}>
             <span className="ic">⬇</span> Baixar PNG
           </button>
         </div>
@@ -242,7 +245,9 @@ export function ImagemPanel(props: ControlsProps) {
 // RIGHT — VÍDEO / ANIMAÇÃO panel
 // ============================================================
 export function VideoPanel(props: ControlsProps) {
-  const disabled = !props.playing;
+  // Animation controls stay editable even when paused, so you can dial in the
+  // animation/export at any time. (Pausing still shows the still PNG.)
+  const disabled = false;
   return (
     <aside className="video-panel">
       <div className="zone-head video">
@@ -300,14 +305,14 @@ export function VideoPanel(props: ControlsProps) {
                 <button
                   className={props.meshFlowDir === -1 ? 'on' : ''}
                   disabled={disabled}
-                  onClick={() => props.playing && props.onMeshFlowDirChange(-1)}
+                  onClick={() => props.onMeshFlowDirChange(-1)}
                 >
                   Pra fora ↗
                 </button>
                 <button
                   className={props.meshFlowDir === 1 ? 'on' : ''}
                   disabled={disabled}
-                  onClick={() => props.playing && props.onMeshFlowDirChange(1)}
+                  onClick={() => props.onMeshFlowDirChange(1)}
                 >
                   Pra dentro ↙
                 </button>
@@ -320,17 +325,47 @@ export function VideoPanel(props: ControlsProps) {
       <section className="group">
         <div className="sec-head"><span className="idx">B2</span><span className="ttl">/ EXPORTAR</span><span className="meta">MOVIE OUT</span></div>
         <div className="group-body">
+          <div className="field-row" style={{ marginBottom: 10 }}>
+            <span className="lbl">RESOLUÇÃO</span>
+            <div className="seg" style={{ flex: 1 }}>
+              <button
+                className={props.videoQuality === '1080' ? 'on' : ''}
+                disabled={props.videoProgress !== null}
+                onClick={() => props.onVideoQualityChange('1080')}
+              >
+                1080
+              </button>
+              <button
+                className={props.videoQuality === '4k' ? 'on' : ''}
+                disabled={props.videoProgress !== null}
+                onClick={() => props.onVideoQualityChange('4k')}
+              >
+                4K
+              </button>
+            </div>
+          </div>
           {props.videoProgress !== null ? (
-            <button className="btn" disabled>
-              {`Exportando… ${Math.round((props.videoProgress.done / props.videoProgress.total) * 100)}%`}
-            </button>
+            <div className="btn-grid c2">
+              <button className="btn exporting" disabled>
+                <span
+                  className="bar"
+                  style={{ width: `${Math.round((props.videoProgress.done / props.videoProgress.total) * 100)}%` }}
+                />
+                <span className="txt">
+                  {`${Math.round((props.videoProgress.done / props.videoProgress.total) * 100)}%`}
+                </span>
+              </button>
+              <button className="btn ghost cancel" onClick={props.onCancelExport}>
+                <span className="ic">✕</span> Cancelar
+              </button>
+            </div>
           ) : (
             <div className="btn-grid c2">
               <button className="btn ghost" onClick={props.onExportPreview}>
                 <span className="ic">👁</span> Preview 480p
               </button>
               <button className="btn cta" onClick={props.onExportVideo}>
-                <span className="ic">🎬</span> Exportar MP4 1080
+                <span className="ic">🎬</span> Exportar MP4 {props.videoQuality === '4k' ? '4K' : '1080'}
               </button>
             </div>
           )}

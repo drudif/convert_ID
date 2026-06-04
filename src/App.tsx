@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagemPanel, VideoPanel, ColorRingsDock, type ControlsProps } from './components/Controls';
 import { Preview, type Zoom } from './components/Preview';
 import { PALETTES, buildCustomPalette } from './data/palettes';
@@ -79,6 +79,8 @@ export default function App() {
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
   const [videoProgress, setVideoProgress] = useState<{ done: number; total: number } | null>(null);
+  const [videoQuality, setVideoQuality] = useState<'1080' | '4k'>('1080');
+  const exportAbortRef = useRef<AbortController | null>(null);
   const [zoom, setZoom] = useState<Zoom>('fit');
   const [savedPalettes, setSavedPalettes] = useState<SavedPalette[]>(() => loadSavedPalettes());
 
@@ -170,13 +172,23 @@ export default function App() {
     if (videoProgress) return; // already running
     setExportError(null);
     setPlaying(false); // free CPU for the offline render
-    const long = preview ? 854 : 1920;
-    const short = preview ? 480 : 1080;
-    const vw = width > height ? long : short;          // landscape → long; portrait/square → short
-    const vh = width < height ? long : short;          // portrait → long; landscape/square → short
-    const bitrate = preview ? 2_500_000 : 8_000_000;
-    // Grain follows the video's own resolution (≤1080 → 0.13), not the image's.
+    // Video resolution is independent of the PNG/Formato — only the ORIENTATION
+    // follows the image; the tier comes from the video's own quality toggle.
+    const orient = width > height ? 'h' : width < height ? 'v' : 's';
+    const dims = (tier: 'preview' | '1080' | '4k'): [number, number] => {
+      if (tier === 'preview') return orient === 'h' ? [854, 480] : orient === 'v' ? [480, 854] : [480, 480];
+      if (tier === '4k') return orient === 'h' ? [3840, 2160] : orient === 'v' ? [2160, 3840] : [2160, 2160];
+      return orient === 'h' ? [1920, 1080] : orient === 'v' ? [1080, 1920] : [1080, 1080];
+    };
+    const [vw, vh] = dims(preview ? 'preview' : videoQuality);
+    // Bitrate scales with resolution (~0.12 bits per pixel·frame), clamped.
+    const bitrate = preview
+      ? 2_500_000
+      : Math.min(40_000_000, Math.max(4_000_000, Math.round(vw * vh * VIDEO_FPS * 0.12)));
+    // Grain follows the video's own resolution (≥3000 → 0.17, else 0.13).
     const videoGrain = Math.max(vw, vh) >= 3000 ? 0.17 : 0.13;
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
     setVideoProgress({ done: 0, total: VIDEO_DURATION * VIDEO_FPS });
     try {
       const { exportMp4 } = await import('./renderer/exportVideo');
@@ -184,6 +196,7 @@ export default function App() {
         { ...params, grain: videoGrain }, vw, vh, VIDEO_DURATION, VIDEO_FPS,
         (done, total) => setVideoProgress({ done, total }),
         bitrate,
+        controller.signal,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -192,14 +205,20 @@ export default function App() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
-      setExportError(err instanceof Error ? err.message : 'Falha ao exportar o vídeo.');
+      if ((err as { name?: string })?.name === 'AbortError') {
+        // user cancelled — silent
+      } else {
+        console.error(err);
+        setExportError(err instanceof Error ? err.message : 'Falha ao exportar o vídeo.');
+      }
     } finally {
+      exportAbortRef.current = null;
       setVideoProgress(null);
     }
   };
   const handleExportVideo = () => handleExport(false);
   const handleExportPreview = () => handleExport(true);
+  const handleCancelExport = () => exportAbortRef.current?.abort();
 
   const handleSavePalette = () => {
     const name = window.prompt('Nome da paleta:');
@@ -240,8 +259,11 @@ export default function App() {
     playing,
     speed,
     videoProgress,
+    videoQuality,
+    onVideoQualityChange: setVideoQuality,
     onExportVideo: handleExportVideo,
     onExportPreview: handleExportPreview,
+    onCancelExport: handleCancelExport,
     morphAmp,
     meshFlow,
     meshFlowDir,
