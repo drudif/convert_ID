@@ -1,6 +1,17 @@
 import { applyGrain } from './grain';
 import { renderMesh } from './mesh';
+import { morphOffset } from './animate';
+import { mulberry32 } from '../lib/prng';
 import type { GradientStop, RenderParams } from '../types';
+
+// A field source: a cluster of "minis" plus its less-spread core copy and an
+// envelope (1 for the permanent composition blobs; 0..1 for transient spawns).
+type Source = {
+  miniRSq: number;
+  minis: { cx: number; cy: number }[];
+  coreMinis: { cx: number; cy: number }[];
+  env: number;
+};
 
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
@@ -33,6 +44,125 @@ function sizeToThreshold(size: number, thrMax: number = FIELD_THR_MAX): number {
   return FIELD_THR_MIN * Math.pow(thrMax / FIELD_THR_MIN, 1 - size);
 }
 
+const TWO_PI = Math.PI * 2;
+const FLOW_SPEED = 0.26;        // drift=1 → this fraction of minDim per second
+const FLOW_MEAND_FREQ = 0.8;    // sideways meander frequency along each path
+// Flowing blobs deform faster, richer and out of sync with each other — like a
+// body squirming through a medium to move, not a flat shape gliding over glass.
+const FLOW_MORPH_FREQ = 1.8;
+const FLOW_MORPH_GAIN = 0.62;
+const SPAWN_FADE = 0.28;        // fraction of a surge's life spent fading in / out
+const FLOW_FADE = 0.18;         // fraction of a flow blob's life spent fading
+
+// Smooth fade-in/out envelope over a normalized life u∈[0,1]. `fade` is the
+// portion at each end spent ramping. Keeps blobs from popping in/out abruptly.
+function fadeEnvelope(u: number, fade: number): number {
+  if (u <= 0 || u >= 1) return 0;
+  const e = Math.min(u / fade, (1 - u) / fade, 1);
+  return e * e * (3 - 2 * e); // smoothstep ease
+}
+
+// Continuous, NON-LOOPING liquid flow. Blob `i` is born at `i*interval` somewhere
+// in the (extended) frame and travels in its OWN random direction (plus a sideways
+// meander) until it leaves the frame, where it's dropped and higher-index blobs
+// keep entering. The metaball field fades naturally at the edges, so blobs glide
+// in and out with no pop and no loop. Only the blobs alive at `t` are built.
+function buildFlowSources(
+  time: number, seed: number, density: number, size: number, driftAmt: number,
+  width: number, height: number, minDim: number, offsetScale: number, morphAmp: number,
+): Source[] {
+  if (density <= 0 || driftAmt <= 0 || size <= 0) return [];
+  const speed = driftAmt * FLOW_SPEED * minDim;       // px / second
+  const margin = size * 1.3 * minDim;                 // off-frame allowance
+  const exW = width + 2 * margin;
+  const exH = height + 2 * margin;
+  const cross = Math.hypot(exW, exH) / speed;         // max relevant age (s)
+  // Spawn fast enough to keep ~density blobs visible inside the real frame
+  // (spawned across the larger extended frame, so scale by the area ratio).
+  const areaRatio = (exW * exH) / (width * height);
+  const interval = cross / Math.max(1, density * areaRatio);
+  // births ≥ 0 so the stream is empty at t=0 (frame 0 = the PNG) and fades in.
+  const iStart = Math.max(0, Math.ceil((time - cross) / interval));
+  const iEnd = Math.floor(time / interval);
+  const out: Source[] = [];
+  for (let i = iStart; i <= iEnd; i++) {
+    const age = time - i * interval;
+    if (age < 0 || age > cross) continue;
+    // Fade in/out over the blob's life so it never pops in at full strength
+    // (even when born inside the frame) — smooth materialise & dissolve.
+    const env = fadeEnvelope(age / cross, FLOW_FADE);
+    if (env <= 0.001) continue;
+    const rng = mulberry32((Math.imul(seed | 0, 0x9e3779b1) ^ Math.imul(i, 0x85ebca6b)) >>> 0);
+    const sx = -margin + rng() * exW;
+    const sy = -margin + rng() * exH;
+    const ang = rng() * TWO_PI;                        // random heading per blob
+    const dirx = Math.cos(ang);
+    const diry = Math.sin(ang);
+    const r = size * (0.7 + rng() * 0.6) * minDim;
+    const mean = r * 0.9 * Math.sin(age * FLOW_MEAND_FREQ + rng() * TWO_PI);
+    const cx = sx + dirx * speed * age - diry * mean;
+    const cy = sy + diry * speed * age + dirx * mean;
+    const blobPhase = rng() * TWO_PI; // per-blob phase → blobs morph out of sync
+    const miniR = r * MINI_R_SCALE;
+    const miniRSq = miniR * miniR;
+    const minis: { cx: number; cy: number }[] = [];
+    const coreMinis: { cx: number; cy: number }[] = [];
+    for (let m = 0; m < MINI_COUNT; m++) {
+      const [mox, moy] = morphOffset(
+        rng() * 2 - 1, rng() * 2 - 1, time, morphAmp,
+        FLOW_MORPH_FREQ, FLOW_MORPH_GAIN, blobPhase, 1,
+      );
+      const ox = mox * r * offsetScale;
+      const oy = moy * r * offsetScale;
+      minis.push({ cx: cx + ox, cy: cy + oy });
+      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+    }
+    out.push({ miniRSq, minis, coreMinis, env });
+  }
+  return out;
+}
+
+// In-place "surgimento": transient blobs that fade in and out at random spots
+// (no travel), layered on top of whatever base field is active. Deterministic
+// and non-looping (spawn index grows with time).
+function buildSpawnSources(
+  time: number, seed: number, rate: number, life: number, size: number, sizeVar: number,
+  width: number, height: number, minDim: number, offsetScale: number, morphAmp: number,
+): Source[] {
+  if (rate <= 0 || life <= 0 || size <= 0) return [];
+  const interval = 1 / rate;
+  // births ≥ 0 so surgimento is empty at t=0 (frame 0 = the PNG) and fades in.
+  const iStart = Math.max(0, Math.ceil((time - life) / interval));
+  const iEnd = Math.floor(time / interval);
+  const out: Source[] = [];
+  for (let i = iStart; i <= iEnd; i++) {
+    const age = time - i * interval;
+    if (age < 0 || age > life) continue;
+    const env = fadeEnvelope(age / life, SPAWN_FADE);
+    if (env <= 0.001) continue;
+    // Distinct salt from the flow stream so spawn positions don't correlate.
+    const rng = mulberry32((Math.imul(seed | 0, 0x2545f491) ^ Math.imul(i, 0x9e3779b1) ^ 0xABCDEF) >>> 0);
+    const cx = rng() * width;
+    const cy = rng() * height;
+    // sizeVar widens the random spread around `size` (0 = all equal).
+    const factor = Math.max(0.15, 1 + (rng() * 2 - 1) * sizeVar * 0.6);
+    const r = size * factor * minDim;
+    const miniR = r * MINI_R_SCALE;
+    const miniRSq = miniR * miniR;
+    const minis: { cx: number; cy: number }[] = [];
+    const coreMinis: { cx: number; cy: number }[] = [];
+    for (let m = 0; m < MINI_COUNT; m++) {
+      const [mox, moy] = morphOffset(rng() * 2 - 1, rng() * 2 - 1, time, morphAmp);
+      const ox = mox * r * offsetScale;
+      const oy = moy * r * offsetScale;
+      minis.push({ cx: cx + ox, cy: cy + oy });
+      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+    }
+    out.push({ miniRSq, minis, coreMinis, env });
+  }
+  return out;
+}
+
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const m = hex.replace('#', '');
   return {
@@ -62,7 +192,9 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   }
   const {
     width, height, palette, composition,
-    grain, irregularity,
+    grain, irregularity, time, morphAmp,
+    drift, flowDensity, flowSize,
+    spawnRate, spawnLife, spawnSize, spawnSizeVar,
     ring0Weight, ring0Fluidez,
     ring1Weight, ring1Fluidez,
     ring2Weight, ring2Fluidez,
@@ -93,23 +225,46 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   //    measure the actual peak field of this composition).
   const minDim = Math.min(width, height);
   const offsetScale = MINI_OFFSET_SCALE * irregularity;
-  const blobs = composition.blobs.map((b) => {
+  // Base layer = the designed composition (the PNG). At time 0 it sits exactly
+  // at its designed positions, so the animation STARTS FROM THE PNG. When the
+  // correnteza (drift) is on, each composition blob then drifts along its own
+  // heading (+ meander) and leaves the frame — handed off to the flow stream
+  // and surgimento, which start empty at t=0 and fade in to sustain the scene.
+  const flowSpeed = drift * FLOW_SPEED * minDim;
+  const base: Source[] = composition.blobs.map((b, i) => {
     const r = b.radius * minDim;
     const miniR = r * MINI_R_SCALE;
     const miniRSq = miniR * miniR;
-    const cx = b.x * width;
-    const cy = b.y * height;
+    let cx = b.x * width;
+    let cy = b.y * height;
+    // Straight per-blob drift (no meander) so the offset is exactly 0 at time 0
+    // — the base composition stays pixel-identical to the Mesh field at t=0, and
+    // both modes use the SAME base morph, so Heat map and Mesh stay in register.
+    if (drift > 0) {
+      const rng = mulberry32((Math.imul(composition.seed | 0, 0x9e3779b1) ^ Math.imul(i + 1, 0x85ebca6b)) >>> 0);
+      const ang = rng() * TWO_PI;
+      cx += Math.cos(ang) * flowSpeed * time;
+      cy += Math.sin(ang) * flowSpeed * time;
+    }
     const minis: { cx: number; cy: number }[] = [];
     const coreMinis: { cx: number; cy: number }[] = [];
     for (const m of b.harmonics.minis) {
-      const ox = m.ox * r * offsetScale;
-      const oy = m.oy * r * offsetScale;
+      const [mox, moy] = morphOffset(m.ox, m.oy, time, morphAmp);
+      const ox = mox * r * offsetScale;
+      const oy = moy * r * offsetScale;
       minis.push({ cx: cx + ox, cy: cy + oy });
       coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
     }
-    return { miniRSq, minis, coreMinis };
+    return { miniRSq, minis, coreMinis, env: 1 };
   });
-  const nBlobs = blobs.length;
+  // Stream (sustains the flow as the composition drifts off) + in-place
+  // surgimento. Both start empty at t=0 (births ≥ 0) so frame 0 is purely the PNG.
+  const sources = base
+    .concat(buildFlowSources(time, composition.seed, flowDensity, flowSize, drift,
+      width, height, minDim, offsetScale, morphAmp))
+    .concat(buildSpawnSources(time, composition.seed, spawnRate, spawnLife, spawnSize, spawnSizeVar,
+      width, height, minDim, offsetScale, morphAmp));
+  const nSources = sources.length;
 
   // 4. Estimate the peak field on a coarse grid. The metaball field maxes out
   //    around blob/cluster cores, but its exact peak depends on blob count,
@@ -124,18 +279,19 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     for (let x = 0; x < width; x += sampleStep) {
       let f = 0;
       let cf = 0;
-      for (let i = 0; i < nBlobs; i++) {
-        const b = blobs[i];
+      for (let i = 0; i < nSources; i++) {
+        const b = sources[i];
         const miniRSq = b.miniRSq;
+        const env = b.env;
         for (let m = 0; m < b.minis.length; m++) {
           const mini = b.minis[m];
           const dx = x - mini.cx;
           const dy = y - mini.cy;
-          f += miniRSq / (dx * dx + dy * dy + miniRSq);
+          f += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
           const cm = b.coreMinis[m];
           const cdx = x - cm.cx;
           const cdy = y - cm.cy;
-          cf += miniRSq / (cdx * cdx + cdy * cdy + miniRSq);
+          cf += env * (miniRSq / (cdx * cdx + cdy * cdy + miniRSq));
         }
       }
       if (f > fieldMax) fieldMax = f;
@@ -195,14 +351,15 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let totalField = 0;
-      for (let i = 0; i < nBlobs; i++) {
-        const b = blobs[i];
+      for (let i = 0; i < nSources; i++) {
+        const b = sources[i];
         const miniRSq = b.miniRSq;
+        const env = b.env;
         for (let m = 0; m < b.minis.length; m++) {
           const mini = b.minis[m];
           const dx = x - mini.cx;
           const dy = y - mini.cy;
-          totalField += miniRSq / (dx * dx + dy * dy + miniRSq);
+          totalField += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
         }
       }
 
@@ -218,14 +375,15 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       // º0 uses the less-spread core field so it stays compact and bright as
       // irregularity rises, instead of diluting with the fully-spread field.
       let coreField = 0;
-      for (let i = 0; i < nBlobs; i++) {
-        const b = blobs[i];
+      for (let i = 0; i < nSources; i++) {
+        const b = sources[i];
         const miniRSq = b.miniRSq;
+        const env = b.env;
         for (let m = 0; m < b.coreMinis.length; m++) {
           const cm = b.coreMinis[m];
           const dx = x - cm.cx;
           const dy = y - cm.cy;
-          coreField += miniRSq / (dx * dx + dy * dy + miniRSq);
+          coreField += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
         }
       }
       const b0 = smoothstep(thr0 - band0, thr0 + band0, coreField);

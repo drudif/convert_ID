@@ -1,18 +1,18 @@
-import { useMemo, useState } from 'react';
-import { Controls } from './components/Controls';
+import { useEffect, useMemo, useState } from 'react';
+import { ImagemPanel, VideoPanel, ColorRingsDock, type ControlsProps } from './components/Controls';
 import { Preview, type Zoom } from './components/Preview';
 import { PALETTES, buildCustomPalette } from './data/palettes';
 import {
   loadSavedPalettes,
   persistSavedPalettes,
   savedToPalette,
-  serializePalettes,
-  parsePalettesFile,
   newId,
   type SavedPalette,
 } from './data/savedPalettes';
 import { generateComposition } from './renderer/composition';
 import { exportPNG } from './renderer/export';
+// NOTE: ./renderer/exportVideo (mp4-muxer + WebCodecs) is imported lazily inside
+// handleExportVideo so the heavy/optional encoder never affects initial load.
 import type { MeshColorMode, RenderMode, RenderParams } from './types';
 
 export default function App() {
@@ -25,13 +25,35 @@ export default function App() {
   const [mode, setMode] = useState<RenderMode>('heatmap');
   const [blobCount, setBlobCount] = useState(5);
   const [irregularity, setIrregularity] = useState(1);
-  // Grain is tracked per render mode so each keeps its own default and any
-  // manual tweak survives toggling between Heat map and Mesh.
-  const [grainHeatmap, setGrainHeatmap] = useState(0.25);
-  const [grainMesh, setGrainMesh] = useState(0.2);
-  const grain = mode === 'mesh' ? grainMesh : grainHeatmap;
-  const handleGrainChange = (g: number) =>
-    (mode === 'mesh' ? setGrainMesh : setGrainHeatmap)(g);
+  // Animation. `playing`/`speed` drive the clock inside Preview; morph & flow
+  // are static amounts fed into the render params (time is supplied per-frame).
+  const [playing, setPlaying] = useState(false);
+  // Speed is per render mode so each keeps its own default.
+  const [speedHeatmap, setSpeedHeatmap] = useState(1);
+  const [speedMesh, setSpeedMesh] = useState(0.9);
+  const speed = mode === 'mesh' ? speedMesh : speedHeatmap;
+  const handleSpeedChange = (s: number) =>
+    (mode === 'mesh' ? setSpeedMesh : setSpeedHeatmap)(s);
+  const [morphAmp, setMorphAmp] = useState(0.5);
+  const [meshFlow, setMeshFlow] = useState(0.23);
+  const [meshFlowDir, setMeshFlowDir] = useState<1 | -1>(-1); // -1 = outward
+  // Heatmap liquid flow. drift = 0 keeps the static composition; > 0 turns the
+  // heatmap into a continuous stream of blobs crossing and leaving the frame.
+  const [drift, setDrift] = useState(0.42);
+  const [flowDensity, setFlowDensity] = useState(4);
+  const [flowSize, setFlowSize] = useState(0.06);
+  const [spawnRate, setSpawnRate] = useState(0.8);
+  const [spawnLife, setSpawnLife] = useState(8);
+  const [spawnSize, setSpawnSize] = useState(0.15);
+  const [spawnSizeVar, setSpawnSizeVar] = useState(0.97);
+  // Grain compensates for resolution (finer/less visible at 4K), so its default
+  // tracks the output size: 0.17 at 4K, 0.13 at 1080. Still manually adjustable;
+  // changing the Formato quality re-applies the resolution default (see effect).
+  const [grain, setGrain] = useState(0.17);
+  // Re-apply the resolution-appropriate grain whenever the output size changes.
+  useEffect(() => {
+    setGrain(Math.max(width, height) >= 3000 ? 0.17 : 0.13);
+  }, [width, height]);
   // Mesh (topographic contour) mode params.
   const [meshLevels, setMeshLevels] = useState(28);
   const [meshLineWidth, setMeshLineWidth] = useState(1);
@@ -56,6 +78,7 @@ export default function App() {
   const [bordaFluidez, setBordaFluidez] = useState(0.25);
   const [seed, setSeed] = useState(1);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [videoProgress, setVideoProgress] = useState<{ done: number; total: number } | null>(null);
   const [zoom, setZoom] = useState<Zoom>('fit');
   const [savedPalettes, setSavedPalettes] = useState<SavedPalette[]>(() => loadSavedPalettes());
 
@@ -79,6 +102,12 @@ export default function App() {
     mode,
     grain,
     irregularity,
+    time: 0, // advanced per-frame inside Preview while playing
+    morphAmp,
+    meshFlow,
+    meshFlowDir,
+    drift, flowDensity, flowSize,
+    spawnRate, spawnLife, spawnSize, spawnSizeVar,
     meshLevels, meshLineWidth, meshRelief, meshLineColor, meshColorMode,
     ring0Weight, ring0Fluidez,
     ring1Weight, ring1Fluidez,
@@ -86,6 +115,18 @@ export default function App() {
     ring3Weight, ring3Fluidez,
     ring4Weight, ring4Fluidez,
     bordaWeight, bordaFluidez,
+  };
+
+  // Switching to Custom inherits the colours currently on screen (the active
+  // preset/saved palette), so editing starts from what you were just seeing.
+  const handlePaletteChange = (id: string) => {
+    if (id === 'custom' && paletteId !== 'custom') {
+      const bg = palette.background;
+      const stops = palette.blobVariants[0].stops;
+      const ring = (i: number) => (stops[i].alpha < 0.05 ? bg : stops[i].color);
+      setCustomColors([bg, ring(0), ring(1), ring(2), ring(3), ring(4), ring(5)]);
+    }
+    setPaletteId(id);
   };
 
   const handleCustomColorChange = (idx: number, color: string) => {
@@ -122,6 +163,44 @@ export default function App() {
     });
   };
 
+  const VIDEO_DURATION = 10;
+  const VIDEO_FPS = 30;
+  // preview = quick 480p pass to check before committing to a full 1080 render.
+  const handleExport = async (preview: boolean) => {
+    if (videoProgress) return; // already running
+    setExportError(null);
+    setPlaying(false); // free CPU for the offline render
+    const long = preview ? 854 : 1920;
+    const short = preview ? 480 : 1080;
+    const vw = width > height ? long : short;          // landscape → long; portrait/square → short
+    const vh = width < height ? long : short;          // portrait → long; landscape/square → short
+    const bitrate = preview ? 2_500_000 : 8_000_000;
+    // Grain follows the video's own resolution (≤1080 → 0.13), not the image's.
+    const videoGrain = Math.max(vw, vh) >= 3000 ? 0.17 : 0.13;
+    setVideoProgress({ done: 0, total: VIDEO_DURATION * VIDEO_FPS });
+    try {
+      const { exportMp4 } = await import('./renderer/exportVideo');
+      const blob = await exportMp4(
+        { ...params, grain: videoGrain }, vw, vh, VIDEO_DURATION, VIDEO_FPS,
+        (done, total) => setVideoProgress({ done, total }),
+        bitrate,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `convert_ID_GEN-${mode}-${seed}-${vw}x${vh}${preview ? '-preview' : ''}.mp4`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setExportError(err instanceof Error ? err.message : 'Falha ao exportar o vídeo.');
+    } finally {
+      setVideoProgress(null);
+    }
+  };
+  const handleExportVideo = () => handleExport(false);
+  const handleExportPreview = () => handleExport(true);
+
   const handleSavePalette = () => {
     const name = window.prompt('Nome da paleta:');
     if (name === null) return;
@@ -147,142 +226,127 @@ export default function App() {
     if (paletteId === id) setPaletteId('nightfall');
   };
 
-  const handleExportPalettes = () => {
-    const blob = new Blob([serializePalettes(savedPalettes)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'convert_ID_GEN-paletas.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportPalettes = (file: File) => {
-    file.text().then((text) => {
-      try {
-        const imported = parsePalettesFile(text);
-        if (!imported.length) {
-          window.alert('Nenhuma paleta válida encontrada no arquivo.');
-          return;
-        }
-        setSavedPalettes((prev) => {
-          const byId = new Map(prev.map((p) => [p.id, p]));
-          for (const p of imported) byId.set(p.id, p);
-          const next = [...byId.values()];
-          persistSavedPalettes(next);
-          return next;
-        });
-      } catch {
-        window.alert('Arquivo de paletas inválido.');
-      }
-    });
+  const controlsProps: ControlsProps = {
+    width,
+    height,
+    paletteId,
+    customColors,
+    savedPalettes,
+    mode,
+    blobCount,
+    irregularity,
+    grain,
+    seed,
+    playing,
+    speed,
+    videoProgress,
+    onExportVideo: handleExportVideo,
+    onExportPreview: handleExportPreview,
+    morphAmp,
+    meshFlow,
+    meshFlowDir,
+    drift,
+    flowDensity,
+    flowSize,
+    spawnRate,
+    spawnLife,
+    spawnSize,
+    spawnSizeVar,
+    meshLevels,
+    meshLineWidth,
+    meshRelief,
+    meshLineColor,
+    meshColorMode,
+    ring0Weight,
+    ring0Fluidez,
+    ring1Weight,
+    ring1Fluidez,
+    ring2Weight,
+    ring2Fluidez,
+    ring3Weight,
+    ring3Fluidez,
+    ring4Weight,
+    ring4Fluidez,
+    bordaWeight,
+    bordaFluidez,
+    onWidthChange: setWidth,
+    onHeightChange: setHeight,
+    onPaletteChange: handlePaletteChange,
+    onCustomColorChange: handleCustomColorChange,
+    onSavePalette: handleSavePalette,
+    onDeletePalette: handleDeletePalette,
+    onModeChange: setMode,
+    onBlobCountChange: setBlobCount,
+    onIrregularityChange: setIrregularity,
+    onGrainChange: setGrain,
+    onPlayingChange: setPlaying,
+    onSpeedChange: handleSpeedChange,
+    onMorphAmpChange: setMorphAmp,
+    onMeshFlowChange: setMeshFlow,
+    onMeshFlowDirChange: setMeshFlowDir,
+    onDriftChange: setDrift,
+    onFlowDensityChange: setFlowDensity,
+    onFlowSizeChange: setFlowSize,
+    onSpawnRateChange: setSpawnRate,
+    onSpawnLifeChange: setSpawnLife,
+    onSpawnSizeChange: setSpawnSize,
+    onSpawnSizeVarChange: setSpawnSizeVar,
+    onMeshLevelsChange: setMeshLevels,
+    onMeshLineWidthChange: setMeshLineWidth,
+    onMeshReliefChange: setMeshRelief,
+    onMeshLineColorChange: setMeshLineColor,
+    onMeshColorModeChange: setMeshColorMode,
+    onRing0WeightChange: handleRing0Weight,
+    onRing0FluidezChange: setRing0Fluidez,
+    onRing1WeightChange: handleRing1Weight,
+    onRing1FluidezChange: setRing1Fluidez,
+    onRing2WeightChange: handleRing2Weight,
+    onRing2FluidezChange: setRing2Fluidez,
+    onRing3WeightChange: handleRing3Weight,
+    onRing3FluidezChange: setRing3Fluidez,
+    onRing4WeightChange: handleRing4Weight,
+    onRing4FluidezChange: setRing4Fluidez,
+    onBordaWeightChange: handleBordaWeight,
+    onBordaFluidezChange: setBordaFluidez,
+    onRandomize: handleRandomize,
+    onDownload: handleDownload,
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#050507' }}>
-      <Controls
-        width={width}
-        height={height}
-        paletteId={paletteId}
-        customColors={customColors}
-        savedPalettes={savedPalettes}
-        mode={mode}
-        blobCount={blobCount}
-        irregularity={irregularity}
-        grain={grain}
-        meshLevels={meshLevels}
-        meshLineWidth={meshLineWidth}
-        meshRelief={meshRelief}
-        meshLineColor={meshLineColor}
-        meshColorMode={meshColorMode}
-        ring0Weight={ring0Weight}
-        ring0Fluidez={ring0Fluidez}
-        ring1Weight={ring1Weight}
-        ring1Fluidez={ring1Fluidez}
-        ring2Weight={ring2Weight}
-        ring2Fluidez={ring2Fluidez}
-        ring3Weight={ring3Weight}
-        ring3Fluidez={ring3Fluidez}
-        ring4Weight={ring4Weight}
-        ring4Fluidez={ring4Fluidez}
-        bordaWeight={bordaWeight}
-        bordaFluidez={bordaFluidez}
-        onWidthChange={setWidth}
-        onHeightChange={setHeight}
-        onPaletteChange={setPaletteId}
-        onCustomColorChange={handleCustomColorChange}
-        onSavePalette={handleSavePalette}
-        onDeletePalette={handleDeletePalette}
-        onExportPalettes={handleExportPalettes}
-        onImportPalettes={handleImportPalettes}
-        onModeChange={setMode}
-        onBlobCountChange={setBlobCount}
-        onIrregularityChange={setIrregularity}
-        onGrainChange={handleGrainChange}
-        onMeshLevelsChange={setMeshLevels}
-        onMeshLineWidthChange={setMeshLineWidth}
-        onMeshReliefChange={setMeshRelief}
-        onMeshLineColorChange={setMeshLineColor}
-        onMeshColorModeChange={setMeshColorMode}
-        onRing0WeightChange={handleRing0Weight}
-        onRing0FluidezChange={setRing0Fluidez}
-        onRing1WeightChange={handleRing1Weight}
-        onRing1FluidezChange={setRing1Fluidez}
-        onRing2WeightChange={handleRing2Weight}
-        onRing2FluidezChange={setRing2Fluidez}
-        onRing3WeightChange={handleRing3Weight}
-        onRing3FluidezChange={setRing3Fluidez}
-        onRing4WeightChange={handleRing4Weight}
-        onRing4FluidezChange={setRing4Fluidez}
-        onBordaWeightChange={handleBordaWeight}
-        onBordaFluidezChange={setBordaFluidez}
-        onRandomize={handleRandomize}
-        onDownload={handleDownload}
-      />
-      <main style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: 32,
-        overflow: 'hidden',
-        gap: 12,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#a8a8b0', fontSize: 12 }}>Zoom</span>
-          <button onClick={() => setZoom('fit')} style={zoomChip(zoom === 'fit')}>
-            Fit
-          </button>
-          <button onClick={() => setZoom('100')} style={zoomChip(zoom === '100')}>
-            100%
-          </button>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <div className="wm">convert_<b>ID_GEN</b></div>
+          <div className="tag">GENERATIVE ID ENGINE</div>
         </div>
-        {exportError && (
-          <p style={{
-            color: '#fca5a5',
-            background: 'rgba(220, 38, 38, 0.15)',
-            border: '1px solid rgba(220, 38, 38, 0.4)',
-            padding: '8px 12px',
-            borderRadius: 4,
-            margin: 0,
-            fontSize: 13,
-          }}>
-            {exportError}
-          </p>
-        )}
-        <Preview params={params} zoom={zoom} />
+        <div className="strip">
+          <div className="cell"><span className="k">MODO</span><span className="v">{mode === 'mesh' ? 'MESH' : 'HEAT MAP'}</span></div>
+          <div className="cell"><span className="k">SEED</span><span className="v">{seed}</span></div>
+          <div className="cell"><span className="k">RESOLUÇÃO</span><span className="v">{width}×{height}<span className="unit">px</span></span></div>
+          <div className="cell"><span className="k">BLOBS</span><span className="v">{blobCount}</span></div>
+          <div className="cell"><span className="k">GRÃO</span><span className="v">{grain.toFixed(2)}</span></div>
+          <div className="cell"><span className="k">FPS</span><span className="v">{VIDEO_FPS}</span></div>
+          <div className="topbar-zoom">
+            <button className={zoom === 'fit' ? 'on' : ''} onClick={() => setZoom('fit')}>Fit</button>
+            <button className={zoom === '100' ? 'on' : ''} onClick={() => setZoom('100')}>100%</button>
+          </div>
+          <div className="right">
+            <span className="statline"><span className="led" />RENDER&nbsp;OK</span>
+            <span className="statline"><span className={'led' + (playing ? ' mag' : ' off')} />LIVE</span>
+          </div>
+        </div>
+      </header>
+
+      <ImagemPanel {...controlsProps} />
+
+      <main className="stage">
+        {exportError && <p className="export-error">{exportError}</p>}
+        <Preview params={params} zoom={zoom} playing={playing} speed={speed} />
       </main>
+
+      <VideoPanel {...controlsProps} />
+
+      <ColorRingsDock {...controlsProps} />
     </div>
   );
-}
-
-function zoomChip(active: boolean): React.CSSProperties {
-  return {
-    padding: '5px 12px',
-    background: active ? '#6b46c1' : '#1a1a1f',
-    color: active ? '#fff' : '#9ca3af',
-    border: '1px solid ' + (active ? '#6b46c1' : '#2a2a30'),
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 12,
-  };
 }

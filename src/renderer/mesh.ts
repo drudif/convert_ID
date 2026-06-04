@@ -1,5 +1,6 @@
 import { drawContours } from './contour';
 import { applyGrain } from './grain';
+import { morphOffset } from './animate';
 import type { RenderParams } from '../types';
 
 // Field-source constants mirror the heatmap renderer so the mesh relief tracks
@@ -11,6 +12,9 @@ const MINI_OFFSET_SCALE = 0.65;
 // Contour grid resolution (px between sampled vertices). Finer = smoother lines
 // but more work; ~2.5px reads as smooth at preview and export sizes alike.
 const CELL_PX = 2.5;
+
+// Base speed at which contour levels scroll when meshFlow > 0.
+const FLOW_FREQ = 0.15;
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = hex.replace('#', '');
@@ -38,6 +42,7 @@ function sampleRamp(colors: string[], pos: number): string {
 export function renderMesh(target: HTMLCanvasElement, params: RenderParams): void {
   const {
     width, height, palette, composition, irregularity, grain,
+    time, morphAmp, meshFlow, meshFlowDir,
     meshLevels, meshLineWidth, meshRelief, meshLineColor, meshColorMode,
   } = params;
   target.width = width;
@@ -57,10 +62,10 @@ export function renderMesh(target: HTMLCanvasElement, params: RenderParams): voi
     const miniRSq = miniR * miniR;
     const cx = b.x * width;
     const cy = b.y * height;
-    const minis = b.harmonics.minis.map((m) => ({
-      cx: cx + m.ox * r * offsetScale,
-      cy: cy + m.oy * r * offsetScale,
-    }));
+    const minis = b.harmonics.minis.map((m) => {
+      const [ox, oy] = morphOffset(m.ox, m.oy, time, morphAmp);
+      return { cx: cx + ox * r * offsetScale, cy: cy + oy * r * offsetScale };
+    });
     return { miniRSq, minis };
   });
   const nBlobs = blobs.length;
@@ -109,12 +114,17 @@ export function renderMesh(target: HTMLCanvasElement, params: RenderParams): voi
     if (h > hMax) hMax = h;
   }
 
-  // 5. Evenly spaced contour levels across the field's range.
+  // 5. Evenly spaced contour levels across the field's range. With meshFlow > 0
+  //    the whole set scrolls over time (and wraps), giving the "living map"
+  //    flow — lines drift outward/inward, vanishing at one end and reappearing
+  //    at the other. meshFlow = 0 reproduces the static evenly-spaced levels.
   const span = hMax - hMin || 1;
   const nLevels = Math.max(1, Math.round(meshLevels));
+  const flow = meshFlow !== 0 ? (((time * meshFlow * FLOW_FREQ * meshFlowDir) % 1) + 1) % 1 : 0;
   const levels: number[] = [];
-  for (let k = 1; k <= nLevels; k++) {
-    levels.push(hMin + (span * k) / (nLevels + 1));
+  for (let k = 0; k < nLevels; k++) {
+    const frac = (((k + 0.5) / nLevels) + flow) % 1;
+    levels.push(hMin + span * frac);
   }
 
   // 6. Per-level colours. 'solid' uses one ink; 'palette' samples the heatmap

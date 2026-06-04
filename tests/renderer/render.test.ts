@@ -15,6 +15,9 @@ function makeParams(overrides: Partial<RenderParams> = {}): RenderParams {
     mode: 'heatmap',
     grain: 0.5,
     irregularity: 0,
+    time: 0, morphAmp: 0.5, meshFlow: 0.5, meshFlowDir: -1,
+    drift: 0, flowDensity: 6, flowSize: 0.18,
+    spawnRate: 0, spawnLife: 4, spawnSize: 0.18, spawnSizeVar: 0.5,
     meshLevels: 24, meshLineWidth: 1, meshRelief: 0.6, meshLineColor: '#ec4899', meshColorMode: 'solid',
     ring0Weight: 0.04, ring0Fluidez: 0.25,
     ring1Weight: 0.15, ring1Fluidez: 0.25,
@@ -94,5 +97,52 @@ describe('render', () => {
     expect(() =>
       render(canvas, makeParams({ mode: 'mesh', meshColorMode: 'palette' })),
     ).not.toThrow();
+  });
+
+  it('renders animated frames (morph + flow) without throwing', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 200;
+    for (const mode of ['heatmap', 'mesh'] as const) {
+      for (const time of [0, 1.7, 4.2]) {
+        expect(() =>
+          render(canvas, makeParams({ mode, time, irregularity: 1, morphAmp: 0.6, meshFlow: 0.5 })),
+        ).not.toThrow();
+      }
+    }
+  });
+
+  it('renders heatmap flow + surgimento together without throwing', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 160;
+    for (const time of [0, 3, 9.5, 50]) {
+      expect(() =>
+        render(canvas, makeParams({
+          mode: 'heatmap', time, drift: 0.6, flowDensity: 8, flowSize: 0.2,
+          spawnRate: 1.5, spawnLife: 5, spawnSize: 0.2,
+        })),
+      ).not.toThrow();
+    }
+  });
+
+  it('renders surgimento alone (drift = 0) without throwing', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 160;
+    expect(() =>
+      render(canvas, makeParams({ mode: 'heatmap', time: 6, drift: 0, spawnRate: 2 })),
+    ).not.toThrow();
+  });
+
+  it('mesh flow direction sign does not throw either way', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 160;
+    for (const meshFlowDir of [1, -1] as const) {
+      expect(() =>
+        render(canvas, makeParams({ mode: 'mesh', time: 3, meshFlow: 0.7, meshFlowDir })),
+      ).not.toThrow();
+    }
   });
 });

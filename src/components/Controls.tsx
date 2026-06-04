@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import type { MeshColorMode, Palette, RenderMode } from '../types';
 import { PALETTES } from '../data/palettes';
 import type { SavedPalette } from '../data/savedPalettes';
@@ -29,7 +28,7 @@ function qualityOf(w: number, h: number): Quality {
   return Math.max(w, h) >= 3000 ? '4k' : '1080';
 }
 
-type Props = {
+export type ControlsProps = {
   width: number;
   height: number;
   paletteId: string;
@@ -39,6 +38,22 @@ type Props = {
   blobCount: number;
   irregularity: number;
   grain: number;
+  seed: number;
+  playing: boolean;
+  speed: number;
+  videoProgress: { done: number; total: number } | null;
+  onExportVideo: () => void;
+  onExportPreview: () => void;
+  morphAmp: number;
+  meshFlow: number;
+  meshFlowDir: 1 | -1;
+  drift: number;
+  flowDensity: number;
+  flowSize: number;
+  spawnRate: number;
+  spawnLife: number;
+  spawnSize: number;
+  spawnSizeVar: number;
   meshLevels: number;
   meshLineWidth: number;
   meshRelief: number;
@@ -62,12 +77,22 @@ type Props = {
   onCustomColorChange: (idx: number, color: string) => void;
   onSavePalette: () => void;
   onDeletePalette: (id: string) => void;
-  onExportPalettes: () => void;
-  onImportPalettes: (file: File) => void;
   onModeChange: (m: RenderMode) => void;
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
   onGrainChange: (g: number) => void;
+  onPlayingChange: (p: boolean) => void;
+  onSpeedChange: (s: number) => void;
+  onMorphAmpChange: (m: number) => void;
+  onMeshFlowChange: (f: number) => void;
+  onMeshFlowDirChange: (d: 1 | -1) => void;
+  onDriftChange: (d: number) => void;
+  onFlowDensityChange: (n: number) => void;
+  onFlowSizeChange: (s: number) => void;
+  onSpawnRateChange: (r: number) => void;
+  onSpawnLifeChange: (l: number) => void;
+  onSpawnSizeChange: (s: number) => void;
+  onSpawnSizeVarChange: (v: number) => void;
   onMeshLevelsChange: (n: number) => void;
   onMeshLineWidthChange: (w: number) => void;
   onMeshReliefChange: (r: number) => void;
@@ -108,11 +133,10 @@ function ringColorsFor(
   return { fundo: bg, rings };
 }
 
-export function Controls(props: Props) {
-  const isCustom = props.paletteId === 'custom';
-  const colors = ringColorsFor(props.paletteId, props.customColors, props.savedPalettes);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
+// ============================================================
+// LEFT — IMAGEM panel
+// ============================================================
+export function ImagemPanel(props: ControlsProps) {
   const orientation = orientationOf(props.width, props.height);
   const quality = qualityOf(props.width, props.height);
   const applyFormat = (o: Orientation, q: Quality) => {
@@ -122,487 +146,441 @@ export function Controls(props: Props) {
   };
 
   return (
-    <aside style={{
-      width: 320,
-      padding: 20,
-      background: '#0f0f12',
-      color: '#e5e5e5',
-      borderRight: '1px solid #222',
-      overflowY: 'auto',
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: 13,
-    }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 20px' }}>convert_ID_GEN</h1>
+    <aside className="controls">
+      <div className="zone-head">
+        <span className="zn">IMAGEM</span>
+        <span className="zsub">DEFINE O STILL / PNG</span>
+        <span className="zix">A</span>
+      </div>
 
-      <section style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Modo</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            onClick={() => props.onModeChange('heatmap')}
-            style={chipStyle(props.mode === 'heatmap')}
-          >
-            Heat map
-          </button>
-          <button
-            onClick={() => props.onModeChange('mesh')}
-            style={chipStyle(props.mode === 'mesh')}
-          >
-            Mesh
-          </button>
+      {/* MODE */}
+      <section className="group">
+        <div className="sec-head"><span className="idx">A1</span><span className="ttl">/ MODO</span><span className="meta">RENDER PIPELINE</span></div>
+        <div className="group-body">
+          <div className="toggle">
+            <button
+              className={props.mode === 'heatmap' ? 'on' : ''}
+              onClick={() => props.onModeChange('heatmap')}
+            >
+              Heat map
+            </button>
+            <button
+              className={props.mode === 'mesh' ? 'on' : ''}
+              onClick={() => props.onModeChange('mesh')}
+            >
+              Mesh
+            </button>
+          </div>
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Formato</label>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <div style={subLabelStyle}>Orientação</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {/* FORMAT */}
+      <section className="group">
+        <div className="sec-head"><span className="idx">A2</span><span className="ttl">/ FORMATO</span><span className="meta">OUTPUT GEOMETRY</span></div>
+        <div className="group-body">
+          <div className="field-row" style={{ marginBottom: 10 }}>
+            <span className="lbl">ORIENTAÇÃO</span>
+            <div className="seg" style={{ flex: 1 }}>
               {ORIENTATIONS.map((o) => (
                 <button
                   key={o.id}
+                  className={orientation === o.id ? 'on' : ''}
                   onClick={() => applyFormat(o.id, quality)}
-                  style={chipStyle(orientation === o.id)}
                 >
                   {o.label}
                 </button>
               ))}
             </div>
           </div>
-          <div>
-            <div style={subLabelStyle}>Qualidade</div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => applyFormat(orientation, '1080')} style={chipStyle(quality === '1080')}>
-                1080
-              </button>
-              <button onClick={() => applyFormat(orientation, '4k')} style={chipStyle(quality === '4k')}>
-                4K
-              </button>
+          <div className="field-row">
+            <span className="lbl">QUALIDADE</span>
+            <div className="seg" style={{ flex: 1 }}>
+              <button className={quality === '1080' ? 'on' : ''} onClick={() => applyFormat(orientation, '1080')}>1080</button>
+              <button className={quality === '4k' ? 'on' : ''} onClick={() => applyFormat(orientation, '4k')}>4K</button>
             </div>
           </div>
         </div>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Paleta</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {PALETTES.map((p: Palette) => (
-            <button
-              key={p.id}
-              onClick={() => props.onPaletteChange(p.id)}
-              style={chipStyle(props.paletteId === p.id)}
-            >
-              {p.name}
-            </button>
-          ))}
-          <button
-            key="custom"
-            onClick={() => props.onPaletteChange('custom')}
-            style={chipStyle(props.paletteId === 'custom')}
-          >
-            Custom
+      {/* CAMPO */}
+      <section className="group">
+        <div className="sec-head"><span className="idx">A3</span><span className="ttl">/ CAMPO</span><span className="meta">BLOB FIELD</span></div>
+        <div className="group-body">
+          <Param label="Nº de blobs" min={1} max={8} step={1} value={props.blobCount} onChange={props.onBlobCountChange} />
+          <button className="btn" style={{ margin: '6px 0 10px' }} onClick={props.onRandomize}>
+            <span className="ic">↻</span> Randomize
           </button>
-          {props.savedPalettes.map((sp) => {
-            const active = props.paletteId === sp.id;
-            return (
-              <span key={sp.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, ...chipStyle(active) }}>
-                <button
-                  onClick={() => props.onPaletteChange(sp.id)}
-                  style={{ all: 'unset', cursor: 'pointer' }}
-                >
-                  {sp.name}
-                </button>
-                <button
-                  onClick={() => props.onDeletePalette(sp.id)}
-                  title="Apagar paleta"
-                  style={{ all: 'unset', cursor: 'pointer', opacity: 0.6, fontWeight: 700, lineHeight: 1 }}
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
-        </div>
+          <Param label="Irregularidade" min={0} max={1} step={0.01} value={props.irregularity} onChange={props.onIrregularityChange} />
+          <Param label="Grão" min={0} max={1} step={0.01} value={props.grain} onChange={props.onGrainChange} />
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          {isCustom && (
-            <button onClick={props.onSavePalette} style={chipStyle(false)}>
-              💾 Salvar paleta
-            </button>
+          {props.mode === 'mesh' && (
+            <>
+              <Param label="Densidade de linhas" min={4} max={80} step={1} value={props.meshLevels} onChange={props.onMeshLevelsChange} />
+              <Param label="Espessura" min={0.4} max={3} step={0.1} value={props.meshLineWidth} onChange={props.onMeshLineWidthChange} />
+              <Param label="Relevo extra" min={0} max={1.5} step={0.01} value={props.meshRelief} onChange={props.onMeshReliefChange} />
+              <div className="subnote">COR DA LINHA</div>
+              <div className="seg" style={{ marginBottom: 10 }}>
+                <button className={props.meshColorMode === 'solid' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('solid')}>Sólida</button>
+                <button className={props.meshColorMode === 'palette' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('palette')}>Seguir paleta</button>
+              </div>
+              {props.meshColorMode === 'solid' && (
+                <ColorRow label="Cor" color={props.meshLineColor} onChange={props.onMeshLineColorChange} />
+              )}
+            </>
           )}
-          <button
-            onClick={props.onExportPalettes}
-            disabled={!props.savedPalettes.length}
-            style={{ ...chipStyle(false), opacity: props.savedPalettes.length ? 1 : 0.4 }}
-          >
-            ⬆ Exportar
-          </button>
-          <button onClick={() => fileInputRef.current?.click()} style={chipStyle(false)}>
-            ⬇ Importar
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) props.onImportPalettes(f);
-              e.target.value = '';
-            }}
-          />
-        </div>
 
-        <div style={{ marginTop: 12 }}>
-          {isCustom ? (
-            <ColorRow
-              label="Fundo"
-              color={colors.fundo}
-              onChange={(c) => props.onCustomColorChange(0, c)}
-            />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>Fundo</label>
-              <span style={hexStyle}>{colors.fundo}</span>
-              <span
-                style={{ ...colorSwatchStyle, background: colors.fundo, cursor: 'default' }}
-                aria-hidden
-              />
-            </div>
-          )}
+          <button className="btn cta" style={{ marginTop: 14 }} onClick={props.onDownload}>
+            <span className="ic">⬇</span> Baixar PNG
+          </button>
         </div>
       </section>
-
-      <Slider
-        label="Nº de blobs"
-        min={1}
-        max={8}
-        step={1}
-        value={props.blobCount}
-        onChange={props.onBlobCountChange}
-      />
-      <button onClick={props.onRandomize} style={{ ...buttonStyle, width: '100%', marginBottom: 12 }}>
-        ↻ Randomize
-      </button>
-      <Slider
-        label="Irregularidade"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.irregularity}
-        onChange={props.onIrregularityChange}
-      />
-      <Slider
-        label="Grão"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.grain}
-        onChange={props.onGrainChange}
-      />
-
-      {props.mode === 'mesh' && (
-        <>
-          <Slider
-            label="Densidade de linhas"
-            min={4}
-            max={80}
-            step={1}
-            value={props.meshLevels}
-            onChange={props.onMeshLevelsChange}
-          />
-          <Slider
-            label="Espessura"
-            min={0.4}
-            max={3}
-            step={0.1}
-            value={props.meshLineWidth}
-            onChange={props.onMeshLineWidthChange}
-          />
-          <Slider
-            label="Relevo extra"
-            min={0}
-            max={1.5}
-            step={0.01}
-            value={props.meshRelief}
-            onChange={props.onMeshReliefChange}
-          />
-          <section style={{ marginTop: 8 }}>
-            <label style={labelStyle}>Cor da linha</label>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-              <button
-                onClick={() => props.onMeshColorModeChange('solid')}
-                style={chipStyle(props.meshColorMode === 'solid')}
-              >
-                Sólida
-              </button>
-              <button
-                onClick={() => props.onMeshColorModeChange('palette')}
-                style={chipStyle(props.meshColorMode === 'palette')}
-              >
-                Seguir paleta
-              </button>
-            </div>
-            {props.meshColorMode === 'solid' && (
-              <ColorRow
-                label="Cor"
-                color={props.meshLineColor}
-                onChange={props.onMeshLineColorChange}
-              />
-            )}
-          </section>
-        </>
-      )}
-
-      {props.mode === 'heatmap' && (<>
-      <RingBlock
-        label="º0"
-        isCustom={isCustom}
-        color={colors.rings[0]}
-        onColorChange={(c) => props.onCustomColorChange(1, c)}
-        weight={props.ring0Weight}
-        fluidez={props.ring0Fluidez}
-        onWeightChange={props.onRing0WeightChange}
-        onFluidezChange={props.onRing0FluidezChange}
-      />
-      <RingBlock
-        label="º1"
-        isCustom={isCustom}
-        color={colors.rings[1]}
-        onColorChange={(c) => props.onCustomColorChange(2, c)}
-        weight={props.ring1Weight}
-        fluidez={props.ring1Fluidez}
-        onWeightChange={props.onRing1WeightChange}
-        onFluidezChange={props.onRing1FluidezChange}
-      />
-      <RingBlock
-        label="º2"
-        isCustom={isCustom}
-        color={colors.rings[2]}
-        onColorChange={(c) => props.onCustomColorChange(3, c)}
-        weight={props.ring2Weight}
-        fluidez={props.ring2Fluidez}
-        onWeightChange={props.onRing2WeightChange}
-        onFluidezChange={props.onRing2FluidezChange}
-      />
-      <RingBlock
-        label="º3"
-        isCustom={isCustom}
-        color={colors.rings[3]}
-        onColorChange={(c) => props.onCustomColorChange(4, c)}
-        weight={props.ring3Weight}
-        fluidez={props.ring3Fluidez}
-        onWeightChange={props.onRing3WeightChange}
-        onFluidezChange={props.onRing3FluidezChange}
-      />
-      <RingBlock
-        label="º4"
-        isCustom={isCustom}
-        color={colors.rings[4]}
-        onColorChange={(c) => props.onCustomColorChange(5, c)}
-        weight={props.ring4Weight}
-        fluidez={props.ring4Fluidez}
-        onWeightChange={props.onRing4WeightChange}
-        onFluidezChange={props.onRing4FluidezChange}
-      />
-      <RingBlock
-        label="Borda"
-        isCustom={isCustom}
-        color={colors.rings[5]}
-        onColorChange={(c) => props.onCustomColorChange(6, c)}
-        weight={props.bordaWeight}
-        fluidez={props.bordaFluidez}
-        onWeightChange={props.onBordaWeightChange}
-        onFluidezChange={props.onBordaFluidezChange}
-      />
-      </>)}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 24 }}>
-        <button onClick={props.onDownload} style={{ ...buttonStyle, background: '#6b46c1' }}>
-          ⬇ Baixar PNG
-        </button>
-      </div>
     </aside>
   );
 }
 
-function RingBlock(props: {
-  label: string;
-  isCustom: boolean;
-  color: string;
-  onColorChange: (c: string) => void;
-  weight: number;
-  fluidez: number;
-  onWeightChange: (w: number) => void;
-  onFluidezChange: (f: number) => void;
-}) {
+// ============================================================
+// RIGHT — VÍDEO / ANIMAÇÃO panel
+// ============================================================
+export function VideoPanel(props: ControlsProps) {
+  const disabled = !props.playing;
   return (
-    <section style={ringBlockStyle}>
-      <header style={ringHeaderStyle}>
-        <span style={ringNameStyle}>{props.label}</span>
-        {props.isCustom && (
-          <>
-            <span style={hexStyle}>{props.color}</span>
-            <input
-              type="color"
-              value={props.color}
-              onChange={(e) => props.onColorChange(e.target.value)}
-              style={colorSwatchStyle}
-            />
-          </>
-        )}
-        {!props.isCustom && (
-          <span
-            style={{
-              ...colorSwatchStyle,
-              background: props.color,
-              cursor: 'default',
-            }}
-            aria-hidden
-          />
-        )}
-      </header>
-      <Slider
-        label="Tamanho"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.weight}
-        onChange={props.onWeightChange}
-      />
-      <Slider
-        label="Fluidez"
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.fluidez}
-        onChange={props.onFluidezChange}
-      />
+    <aside className="video-panel">
+      <div className="zone-head video">
+        <span className="zn">VÍDEO / ANIMAÇÃO</span>
+        <span className="zsub">O MOVIMENTO + MP4</span>
+        <span className="zix">B</span>
+      </div>
+
+      <section className="group">
+        <div className="sec-head"><span className="idx">B1</span><span className="ttl">/ MOVIMENTO</span><span className="meta">LIQUID FLOW</span></div>
+        <div className="group-body">
+          <div className="transport" style={{ marginBottom: 12 }}>
+            <button
+              className={props.playing ? 'play' : ''}
+              onClick={() => props.onPlayingChange(true)}
+            >
+              <span className="ic">▶</span> PLAY
+            </button>
+            <button
+              className={!props.playing ? 'play' : ''}
+              onClick={() => props.onPlayingChange(false)}
+            >
+              <span className="ic">❚❚</span> PAUSE
+            </button>
+          </div>
+
+          <Param label="Velocidade" min={0.1} max={3} step={0.1} value={props.speed} onChange={props.onSpeedChange} disabled={disabled} unit="×" />
+          <Param label="Morph (forma)" min={0} max={1} step={0.01} value={props.morphAmp} onChange={props.onMorphAmpChange} disabled={disabled} />
+
+          {props.mode === 'heatmap' && (
+            <>
+              <Param label="Correnteza (fluxo líquido)" min={0} max={1} step={0.01} value={props.drift} onChange={props.onDriftChange} disabled={disabled} />
+              {props.drift > 0 && (
+                <>
+                  <Param label="Densidade do fluxo" min={1} max={20} step={1} value={props.flowDensity} onChange={props.onFlowDensityChange} disabled={disabled} />
+                  <Param label="Tamanho no fluxo" min={0.04} max={0.5} step={0.01} value={props.flowSize} onChange={props.onFlowSizeChange} disabled={disabled} />
+                </>
+              )}
+              <Param label="Surgimento (taxa)" min={0} max={3} step={0.05} value={props.spawnRate} onChange={props.onSpawnRateChange} disabled={disabled} unit="/s" />
+              {props.spawnRate > 0 && (
+                <>
+                  <Param label="Duração do surgimento" min={0.5} max={12} step={0.5} value={props.spawnLife} onChange={props.onSpawnLifeChange} disabled={disabled} unit="s" />
+                  <Param label="Tamanho dos novos" min={0.04} max={0.5} step={0.01} value={props.spawnSize} onChange={props.onSpawnSizeChange} disabled={disabled} />
+                  <Param label="Variação do tamanho" min={0} max={1} step={0.01} value={props.spawnSizeVar} onChange={props.onSpawnSizeVarChange} disabled={disabled} />
+                </>
+              )}
+            </>
+          )}
+
+          {props.mode === 'mesh' && (
+            <>
+              <div className="subnote">MESH ONLY — CONTORNOS</div>
+              <Param label="Fluxo de contornos" min={0} max={1} step={0.01} value={props.meshFlow} onChange={props.onMeshFlowChange} disabled={disabled} />
+              <div className={'seg' + (disabled ? ' disabled' : '')} style={{ marginTop: 10 }}>
+                <button
+                  className={props.meshFlowDir === -1 ? 'on' : ''}
+                  disabled={disabled}
+                  onClick={() => props.playing && props.onMeshFlowDirChange(-1)}
+                >
+                  Pra fora ↗
+                </button>
+                <button
+                  className={props.meshFlowDir === 1 ? 'on' : ''}
+                  disabled={disabled}
+                  onClick={() => props.playing && props.onMeshFlowDirChange(1)}
+                >
+                  Pra dentro ↙
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="group">
+        <div className="sec-head"><span className="idx">B2</span><span className="ttl">/ EXPORTAR</span><span className="meta">MOVIE OUT</span></div>
+        <div className="group-body">
+          {props.videoProgress !== null ? (
+            <button className="btn" disabled>
+              {`Exportando… ${Math.round((props.videoProgress.done / props.videoProgress.total) * 100)}%`}
+            </button>
+          ) : (
+            <div className="btn-grid c2">
+              <button className="btn ghost" onClick={props.onExportPreview}>
+                <span className="ic">👁</span> Preview 480p
+              </button>
+              <button className="btn cta" onClick={props.onExportVideo}>
+                <span className="ic">🎬</span> Exportar MP4 1080
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+// ============================================================
+// BOTTOM — RINGS + PALETTE dock
+// ============================================================
+export function ColorRingsDock(props: ControlsProps) {
+  const isCustom = props.paletteId === 'custom';
+  const colors = ringColorsFor(props.paletteId, props.customColors, props.savedPalettes);
+
+  const rings: Array<{
+    id: string;
+    color: string;
+    colorIdx: number;
+    weight: number;
+    fluidez: number;
+    onWeight: (w: number) => void;
+    onFluidez: (f: number) => void;
+  }> = [
+    { id: 'º0', color: colors.rings[0], colorIdx: 1, weight: props.ring0Weight, fluidez: props.ring0Fluidez, onWeight: props.onRing0WeightChange, onFluidez: props.onRing0FluidezChange },
+    { id: 'º1', color: colors.rings[1], colorIdx: 2, weight: props.ring1Weight, fluidez: props.ring1Fluidez, onWeight: props.onRing1WeightChange, onFluidez: props.onRing1FluidezChange },
+    { id: 'º2', color: colors.rings[2], colorIdx: 3, weight: props.ring2Weight, fluidez: props.ring2Fluidez, onWeight: props.onRing2WeightChange, onFluidez: props.onRing2FluidezChange },
+    { id: 'º3', color: colors.rings[3], colorIdx: 4, weight: props.ring3Weight, fluidez: props.ring3Fluidez, onWeight: props.onRing3WeightChange, onFluidez: props.onRing3FluidezChange },
+    { id: 'º4', color: colors.rings[4], colorIdx: 5, weight: props.ring4Weight, fluidez: props.ring4Fluidez, onWeight: props.onRing4WeightChange, onFluidez: props.onRing4FluidezChange },
+    { id: 'Borda', color: colors.rings[5], colorIdx: 6, weight: props.bordaWeight, fluidez: props.bordaFluidez, onWeight: props.onBordaWeightChange, onFluidez: props.onBordaFluidezChange },
+  ];
+
+  const savedCount = props.savedPalettes.length;
+
+  return (
+    <section className="dock">
+      {/* ANÉIS */}
+      <div className="dock-sub dock-rings">
+        <div className="dock-head">
+          <span className="dh-ttl">Anéis</span>
+          <span className="dh-meta">6 LAYERS + FUNDO · COR / TAMANHO / FLUIDEZ</span>
+        </div>
+        <div className="dock-body">
+          <div className="ringdock">
+            {props.mode === 'heatmap' ? (
+              rings.map((r) => (
+                <div className="ringcol" key={r.id}>
+                  <div className="rc-head">
+                    <span className="rid">{r.id}</span>
+                    <ColorSwatch
+                      className="swc"
+                      isCustom={isCustom}
+                      color={r.color}
+                      onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
+                    />
+                  </div>
+                  <div className="rc-body">
+                    <MiniParam label="TAMANHO" unit="rel" value={r.weight} onChange={r.onWeight} />
+                    <MiniParam label="FLUIDEZ" unit="v" value={r.fluidez} onChange={r.onFluidez} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              rings.map((r) => (
+                <div className="ringcol" key={r.id}>
+                  <div className="rc-head">
+                    <span className="rid">{r.id}</span>
+                    <ColorSwatch
+                      className="swc"
+                      isCustom={isCustom}
+                      color={r.color}
+                      onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
+                    />
+                  </div>
+                  <div className="rc-body">
+                    <div className="rc-na">— MESH MODE —</div>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {/* FUNDO card — color only */}
+            <div className="ringcol">
+              <div className="rc-head"><span className="rid">Fundo</span></div>
+              <div className="rc-body">
+                <div className="rc-na fundo">
+                  <ColorSwatch
+                    className="swc"
+                    isCustom={isCustom}
+                    color={colors.fundo}
+                    onChange={(c) => props.onCustomColorChange(0, c)}
+                  />
+                  <span>SEM TAM/FLU</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rule" />
+
+      {/* PALETA / CORES */}
+      <div className="dock-sub dock-pal">
+        <div className="dock-head">
+          <span className="dh-ttl">Paleta / Cores</span>
+          <span className="dh-meta">{`${PALETTES.length} PRESETS · CUSTOM · ${savedCount} SAVED`}</span>
+          {isCustom && (
+            <button className="btn hd-btn" onClick={props.onSavePalette}>
+              <span className="ic">💾</span> Salvar paleta
+            </button>
+          )}
+        </div>
+        <div className="dock-body">
+          <div className="chips">
+            {PALETTES.map((p: Palette) => (
+              <button
+                key={p.id}
+                className={'chip' + (props.paletteId === p.id ? ' on' : '')}
+                onClick={() => props.onPaletteChange(p.id)}
+              >
+                <span className="sw" style={swStyle(p)} />
+                {p.name}
+              </button>
+            ))}
+            <button
+              key="custom"
+              className={'chip custom' + (isCustom ? ' on' : '')}
+              onClick={() => props.onPaletteChange('custom')}
+            >
+              <span className="sw" style={{ background: 'repeating-linear-gradient(45deg,#9F75FF 0 4px,#161618 4px 8px)' }} />
+              Custom
+            </button>
+            {props.savedPalettes.map((sp) => {
+              const active = props.paletteId === sp.id;
+              return (
+                <span key={sp.id} className={'chip saved' + (active ? ' on' : '')}>
+                  <span className="sw" style={savedSwStyle(sp)} />
+                  <button className="chip-name" onClick={() => props.onPaletteChange(sp.id)}>{sp.name}</button>
+                  <button className="del" title="Apagar paleta" onClick={() => props.onDeletePalette(sp.id)}>×</button>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function ColorRow(props: {
-  label: string;
+function swStyle(p: Palette): React.CSSProperties {
+  const stops = p.blobVariants[0].stops;
+  const a = stops[0]?.color ?? p.background;
+  const b = stops[2]?.color ?? a;
+  const c = stops[4]?.color ?? b;
+  return { background: `linear-gradient(90deg, ${a}, ${b}, ${c})` };
+}
+
+function savedSwStyle(sp: SavedPalette): React.CSSProperties {
+  const [, a, , c, , e] = sp.colors;
+  return { background: `linear-gradient(90deg, ${a}, ${c}, ${e})` };
+}
+
+function ColorSwatch(props: {
+  className: string;
+  isCustom: boolean;
   color: string;
   onChange: (c: string) => void;
 }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>{props.label}</label>
-      <span style={hexStyle}>{props.color}</span>
+  if (props.isCustom) {
+    return (
       <input
         type="color"
+        className={props.className + ' swatch-input'}
         value={props.color}
         onChange={(e) => props.onChange(e.target.value)}
-        style={colorSwatchStyle}
+      />
+    );
+  }
+  return <span className={props.className + ' static'} style={{ background: props.color }} aria-hidden />;
+}
+
+function ColorRow(props: { label: string; color: string; onChange: (c: string) => void }) {
+  return (
+    <div className="field-row" style={{ marginTop: 4 }}>
+      <span className="lbl">{props.label}</span>
+      <span className="hex" style={{ flex: 1 }}>{props.color}</span>
+      <input
+        type="color"
+        className="swatch-input"
+        value={props.color}
+        onChange={(e) => props.onChange(e.target.value)}
       />
     </div>
   );
 }
 
-function Slider(props: {
+function Param(props: {
   label: string;
   min: number;
   max: number;
   step: number;
   value: number;
   onChange: (n: number) => void;
+  disabled?: boolean;
+  unit?: string;
 }) {
   return (
-    <section style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <label style={{ ...labelStyle, marginBottom: 0, fontSize: 12, color: '#a8a8b0' }}>
-          {props.label}
-        </label>
-        <span style={{ color: '#9ca3af', fontSize: 12 }}>{props.value}</span>
-      </div>
+    <div className={'param' + (props.disabled ? ' disabled' : '')}>
+      <span className="name">{props.label}</span>
+      <span className="read">
+        {props.value}
+        {props.unit ? <span className="unit">{props.unit}</span> : null}
+      </span>
       <input
         type="range"
+        className="slider-input"
         min={props.min}
         max={props.max}
         step={props.step}
         value={props.value}
+        disabled={props.disabled}
         onChange={(e) => props.onChange(Number(e.target.value))}
-        style={{ width: '100%' }}
       />
-    </section>
+    </div>
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  marginBottom: 6,
-  color: '#e5e5e5',
-  fontWeight: 500,
-};
-
-const subLabelStyle: React.CSSProperties = {
-  marginBottom: 6,
-  color: '#a8a8b0',
-  fontSize: 12,
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: '10px 14px',
-  background: '#2a2a30',
-  color: '#e5e5e5',
-  border: 'none',
-  borderRadius: 4,
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
-};
-
-const ringBlockStyle: React.CSSProperties = {
-  marginTop: 16,
-  marginBottom: 4,
-  padding: '12px 12px 4px',
-  background: '#16161b',
-  border: '1px solid #25252c',
-  borderRadius: 6,
-};
-
-const ringHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 10,
-  paddingBottom: 8,
-  borderBottom: '1px solid #25252c',
-};
-
-const ringNameStyle: React.CSSProperties = {
-  flex: 1,
-  color: '#e5e5e5',
-  fontWeight: 600,
-  fontSize: 14,
-};
-
-const hexStyle: React.CSSProperties = {
-  color: '#9ca3af',
-  fontFamily: 'monospace',
-  fontSize: 11,
-};
-
-const colorSwatchStyle: React.CSSProperties = {
-  width: 28,
-  height: 22,
-  border: '1px solid #2a2a30',
-  background: 'transparent',
-  cursor: 'pointer',
-  padding: 0,
-  borderRadius: 3,
-};
-
-function chipStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: '6px 10px',
-    background: active ? '#6b46c1' : '#1a1a1f',
-    color: active ? '#fff' : '#9ca3af',
-    border: '1px solid ' + (active ? '#6b46c1' : '#2a2a30'),
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 12,
-  };
+function MiniParam(props: {
+  label: string;
+  unit: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="rc-param">
+      <div className="lab">
+        <span>{props.label}</span>
+        <b>{props.value.toFixed(2)}<span className="unit">{props.unit}</span></b>
+      </div>
+      <input
+        type="range"
+        className="mini-input"
+        min={0}
+        max={1}
+        step={0.01}
+        value={props.value}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+      />
+    </div>
+  );
 }
