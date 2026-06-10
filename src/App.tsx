@@ -115,10 +115,22 @@ export default function App() {
     }
     setGrainHeatmap(Math.max(width, height) >= 3000 ? 0.17 : 0.13);
   }, [width, height]);
-  // Mesh (topographic contour) mode params — defaults do modo mesh.
-  const [meshLevels, setMeshLevels] = useState(64);
-  const [meshLineWidth, setMeshLineWidth] = useState(0.9);
-  const [meshRelief, setMeshRelief] = useState(0.5);
+  // Mesh (topographic contour) mode params. Densidade e relevo são fixos; a
+  // ESPESSURA segue a resolução (1.5 em 1080, 1.0 em 4K) — ver efeito abaixo.
+  // Inicial = 1.0 pois o app abre em 4K.
+  const [meshLevels, setMeshLevels] = useState(80);
+  const [meshLineWidth, setMeshLineWidth] = useState(1.0);
+  const [meshRelief, setMeshRelief] = useState(0.12);
+  // Espessura da linha do mesh segue a resolução (1.5 em 1080, 1.0 em 4K). Skip
+  // próprio p/ honrar o valor importado quando a resolução também muda no import.
+  const skipMeshWidthAutoRef = useRef(false);
+  useEffect(() => {
+    if (skipMeshWidthAutoRef.current) {
+      skipMeshWidthAutoRef.current = false;
+      return;
+    }
+    setMeshLineWidth(Math.max(width, height) >= 3000 ? 1.0 : 1.5);
+  }, [width, height]);
   const [meshLineColor, setMeshLineColor] = useState('#ec4899');
   const [meshColorMode, setMeshColorMode] = useState<MeshColorMode>('solid');
   // Six nested rings (º0 innermost/hottest → Borda outermost = silhouette).
@@ -556,6 +568,7 @@ export default function App() {
       (p.width !== undefined && p.width !== width) ||
       (p.height !== undefined && p.height !== height);
     if (resChanges && p.grainHeatmap !== undefined) skipGrainAutoRef.current = true;
+    if (resChanges && p.meshLineWidth !== undefined) skipMeshWidthAutoRef.current = true;
 
     if (p.width !== undefined) setWidth(p.width);
     if (p.height !== undefined) setHeight(p.height);
