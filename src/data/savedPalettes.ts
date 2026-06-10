@@ -1,7 +1,11 @@
-import type { Palette } from '../types';
+import type { MeshColorMode, Palette, StyleParams } from '../types';
 import { buildCustomPalette } from './palettes';
 
 export type PaletteColors = [string, string, string, string, string, string, string];
+
+// Estado "mesh" de uma paleta: modo da cor da linha (sólida/seguir paleta) + a
+// cor sólida. Salvo junto com a paleta, pra cada preset lembrar seu look no mesh.
+export type PaletteMeshState = { meshColorMode?: MeshColorMode; meshLineColor?: string };
 
 // A user-saved palette is just the 7 custom colours plus a name/id. It renders
 // through buildCustomPalette, exactly like the inline Custom palette.
@@ -12,12 +16,49 @@ export type SavedPalette = {
   // Anéis internos (1..5 = º0…º4) deletados/colapsados nesta paleta. Permite
   // salvar paletas com menos cores. Ausente/vazio = todas as cores ativas.
   deletedColors?: number[];
+  meshColorMode?: MeshColorMode;
+  meshLineColor?: string;
+  style?: StyleParams;
 };
 
 const KEY = 'auragen.savedPalettes';
 
 function isHex6(c: unknown): c is string {
   return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
+}
+
+// Lê o estado mesh tolerante de um objeto qualquer (localStorage / arquivo).
+export function readMeshState(o: Record<string, unknown>): PaletteMeshState {
+  const m: PaletteMeshState = {};
+  if (o.meshColorMode === 'solid' || o.meshColorMode === 'palette') m.meshColorMode = o.meshColorMode;
+  if (isHex6(o.meshLineColor)) m.meshLineColor = o.meshLineColor;
+  return m;
+}
+
+function num6(v: unknown): [number, number, number, number, number, number] | undefined {
+  if (!Array.isArray(v) || v.length !== 6) return undefined;
+  if (!v.every((n) => typeof n === 'number' && Number.isFinite(n))) return undefined;
+  return v as [number, number, number, number, number, number];
+}
+
+// Lê os parâmetros de estilo (forma) tolerante; undefined se incompleto/ausente.
+export function readStyle(o: Record<string, unknown>): StyleParams | undefined {
+  const s = o.style as Record<string, unknown> | undefined;
+  if (!s || typeof s !== 'object') return undefined;
+  const ringWeights = num6(s.ringWeights);
+  const ringFluidez = num6(s.ringFluidez);
+  const n = (k: string): number | undefined => (typeof s[k] === 'number' && Number.isFinite(s[k]) ? (s[k] as number) : undefined);
+  const blobSizeMin = n('blobSizeMin');
+  const blobSizeMax = n('blobSizeMax');
+  const warp = n('warp');
+  const irregularity = n('irregularity');
+  const warpScale = n('warpScale');
+  if (!ringWeights || !ringFluidez || blobSizeMin === undefined || blobSizeMax === undefined
+      || warp === undefined || irregularity === undefined || warpScale === undefined) return undefined;
+  // blobCount/blobSizeVar: tolerantes (estilos antigos não tinham) → defaults.
+  const blobCount = n('blobCount') ?? 3;
+  const blobSizeVar = n('blobSizeVar') ?? 1;
+  return { ringWeights, ringFluidez, blobCount, blobSizeMin, blobSizeMax, blobSizeVar, warp, irregularity, warpScale };
 }
 
 // Tolerant validation — used for both localStorage reads and imported files, so
@@ -39,6 +80,8 @@ function sanitize(data: unknown): SavedPalette[] {
       name: name.trim(),
       colors: colors as PaletteColors,
       ...(deletedColors && deletedColors.length ? { deletedColors } : {}),
+      ...readMeshState(item as Record<string, unknown>),
+      ...(readStyle(item as Record<string, unknown>) ? { style: readStyle(item as Record<string, unknown>) } : {}),
     });
   }
   return out;
@@ -80,7 +123,14 @@ export function paletteColors(p: Palette): PaletteColors {
 
 // Edições salvas dos presets embutidos (override permanente em localStorage).
 // `name` opcional permite renomear um preset embutido.
-export type PaletteOverride = { colors: PaletteColors; deletedColors: number[]; name?: string };
+export type PaletteOverride = {
+  colors: PaletteColors;
+  deletedColors: number[];
+  name?: string;
+  meshColorMode?: MeshColorMode;
+  meshLineColor?: string;
+  style?: StyleParams;
+};
 const OVR_KEY = 'auragen.paletteOverrides';
 const DEL_KEY = 'auragen.deletedPresets';
 
@@ -99,7 +149,8 @@ export function loadOverrides(): Record<string, PaletteOverride> {
         ? ([...new Set(o.deletedColors.filter((n) => Number.isInteger(n) && n >= 1 && n <= 5))] as number[]).slice(0, 3)
         : [];
       const name = typeof o.name === 'string' && o.name.trim() ? o.name.trim() : undefined;
-      out[id] = { colors: colors as PaletteColors, deletedColors: del, ...(name ? { name } : {}) };
+      const style = readStyle(o);
+      out[id] = { colors: colors as PaletteColors, deletedColors: del, ...(name ? { name } : {}), ...readMeshState(o), ...(style ? { style } : {}) };
     }
     return out;
   } catch {

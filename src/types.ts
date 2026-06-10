@@ -8,12 +8,31 @@ export type BlobStops = {
   stops: GradientStop[];
 };
 
+// Parâmetros de FORMA que um Estilo guarda além das cores: tamanho e difusão
+// (ex-fluidez) dos 6 anéis (º0…º4, Borda), tamanho mín/máx dos blobs e os
+// controles de deformação. Ordem dos arrays: [º0, º1, º2, º3, º4, Borda].
+export type StyleParams = {
+  ringWeights: [number, number, number, number, number, number];
+  ringFluidez: [number, number, number, number, number, number];
+  blobCount: number;
+  blobSizeMin: number;
+  blobSizeMax: number;
+  blobSizeVar: number;
+  warp: number;
+  irregularity: number;
+  warpScale: number;
+};
+
 export type Palette = {
   id: string;
   name: string;
   background: string;          // hex
   blobVariants: BlobStops[];   // 1 or more
   variantWeights?: number[];   // optional; parallel to blobVariants; uniform if omitted
+  // Estilo: parâmetros de forma padrão deste preset (só os presets que definem;
+  // os demais usam os defaults globais). Ignorados pelo renderer.
+  style?: StyleParams;
+  deletedColors?: number[];    // anéis internos colapsados por padrão neste estilo
 };
 
 export type BlobMini = {

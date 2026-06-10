@@ -25,7 +25,7 @@ import { generateComposition } from './renderer/composition';
 import { exportPNG } from './renderer/export';
 // NOTE: ./renderer/exportVideo (mp4-muxer + WebCodecs) is imported lazily inside
 // handleExportVideo so the heavy/optional encoder never affects initial load.
-import type { MeshColorMode, Palette, RenderMode, RenderParams } from './types';
+import type { MeshColorMode, Palette, RenderMode, RenderParams, StyleParams } from './types';
 
 export default function App() {
   const [width, setWidth] = useState(3840);
@@ -131,8 +131,9 @@ export default function App() {
     }
     setMeshLineWidth(Math.max(width, height) >= 3000 ? 1.0 : 1.5);
   }, [width, height]);
-  const [meshLineColor, setMeshLineColor] = useState('#ec4899');
-  const [meshColorMode, setMeshColorMode] = useState<MeshColorMode>('solid');
+  // Estado mesh faz parte da paleta — inicia do override da paleta default (convert).
+  const [meshLineColor, setMeshLineColor] = useState(() => loadOverrides().convert?.meshLineColor ?? '#ec4899');
+  const [meshColorMode, setMeshColorMode] = useState<MeshColorMode>(() => loadOverrides().convert?.meshColorMode ?? 'solid');
   // Six nested rings (º0 innermost/hottest → Borda outermost = silhouette).
   // Each ring has SIZE (outer extent) and FLUIDEZ (boundary blur). Nesting
   // is enforced at render time — each inner ring is clamped to the next
@@ -176,16 +177,74 @@ export default function App() {
   const nameOf = (id: string) =>
     paletteOverrides[id]?.name ?? builtinOf(id)?.name ?? savedOf(id)?.name ?? id;
 
-  // Estado SALVO de uma paleta (override > preset embutido > paleta salvada).
-  const savedStateOf = (id: string): { colors: PaletteColors; deletedColors: number[] } => {
-    const ovr = paletteOverrides[id];
-    if (ovr) return { colors: ovr.colors, deletedColors: ovr.deletedColors };
-    const b = builtinOf(id);
-    if (b) return { colors: paletteColors(b), deletedColors: [] };
-    const s = savedOf(id);
-    if (s) return { colors: s.colors, deletedColors: s.deletedColors ?? [] };
-    return { colors: paletteColors(PALETTES[0]), deletedColors: [] };
+  // Defaults do estado "mesh" e dos parâmetros de FORMA (estilo) — usados quando a
+  // paleta não traz os seus.
+  const MESH_MODE_DEFAULT: MeshColorMode = 'solid';
+  const MESH_LINE_DEFAULT = '#ec4899';
+  const STYLE_DEFAULT: StyleParams = {
+    ringWeights: [0.04, 0.15, 0.30, 0.50, 0.70, 0.85],
+    ringFluidez: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25],
+    blobCount: 3,
+    blobSizeMin: 0.12,
+    blobSizeMax: 0.28,
+    blobSizeVar: 1,
+    warp: 0.55,
+    irregularity: 0.95,
+    warpScale: 0.73,
   };
+
+  // Estado SALVO de um Estilo (override > preset embutido > paleta salvada). Inclui
+  // cores, deleções, estado mesh e os parâmetros de forma (style).
+  const savedStateOf = (
+    id: string,
+  ): {
+    colors: PaletteColors;
+    deletedColors: number[];
+    meshColorMode: MeshColorMode;
+    meshLineColor: string;
+    style: StyleParams;
+  } => {
+    const src = paletteOverrides[id] ?? savedOf(id);
+    if (src) {
+      return {
+        colors: src.colors,
+        deletedColors: src.deletedColors ?? [],
+        meshColorMode: src.meshColorMode ?? MESH_MODE_DEFAULT,
+        meshLineColor: src.meshLineColor ?? MESH_LINE_DEFAULT,
+        style: src.style ?? STYLE_DEFAULT,
+      };
+    }
+    const b = builtinOf(id);
+    const colors = b ? paletteColors(b) : paletteColors(PALETTES[0]);
+    return {
+      colors,
+      deletedColors: b?.deletedColors ?? [],
+      meshColorMode: MESH_MODE_DEFAULT,
+      meshLineColor: MESH_LINE_DEFAULT,
+      style: b?.style ?? STYLE_DEFAULT,
+    };
+  };
+
+  // Aplica um StyleParams no estado (setters crus — não marca edição).
+  const applyStyle = (s: StyleParams) => {
+    setRing0Weight(s.ringWeights[0]); setRing1Weight(s.ringWeights[1]); setRing2Weight(s.ringWeights[2]);
+    setRing3Weight(s.ringWeights[3]); setRing4Weight(s.ringWeights[4]); setBordaWeight(s.ringWeights[5]);
+    setRing0Fluidez(s.ringFluidez[0]); setRing1Fluidez(s.ringFluidez[1]); setRing2Fluidez(s.ringFluidez[2]);
+    setRing3Fluidez(s.ringFluidez[3]); setRing4Fluidez(s.ringFluidez[4]); setBordaFluidez(s.ringFluidez[5]);
+    setBlobCount(s.blobCount); setBlobSizeMin(s.blobSizeMin); setBlobSizeMax(s.blobSizeMax); setBlobSizeVar(s.blobSizeVar);
+    setWarp(s.warp); setIrregularity(s.irregularity); setWarpScale(s.warpScale);
+  };
+  // Captura os parâmetros de forma atuais como um StyleParams.
+  const currentStyle = (): StyleParams => ({
+    ringWeights: [ring0Weight, ring1Weight, ring2Weight, ring3Weight, ring4Weight, bordaWeight],
+    ringFluidez: [ring0Fluidez, ring1Fluidez, ring2Fluidez, ring3Fluidez, ring4Fluidez, bordaFluidez],
+    blobCount, blobSizeMin, blobSizeMax, blobSizeVar, warp, irregularity, warpScale,
+  });
+  // No mount, aplica o style salvo do estilo ativo (ex.: override de convert).
+  useEffect(() => {
+    applyStyle(savedStateOf(paletteId).style);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Objeto Palette "salvo" de um id (preserva estrutura multi-variante de presets
   // não-editados, como Aurora; overrides/salvas viram custom single-variant).
@@ -286,6 +345,9 @@ export default function App() {
     const st = savedStateOf(id);
     setCustomColors(st.colors);
     setDeletedColors(st.deletedColors);
+    setMeshColorMode(st.meshColorMode);
+    setMeshLineColor(st.meshLineColor);
+    applyStyle(st.style);
     setPaletteId(id);
     setEdited(false);
   };
@@ -295,6 +357,9 @@ export default function App() {
     const st = savedStateOf(paletteId);
     setCustomColors(st.colors);
     setDeletedColors(st.deletedColors);
+    setMeshColorMode(st.meshColorMode);
+    setMeshLineColor(st.meshLineColor);
+    applyStyle(st.style);
     setEdited(false);
   };
 
@@ -305,6 +370,16 @@ export default function App() {
       next[idx] = color;
       return next;
     });
+  };
+
+  // Estado mesh faz parte da paleta → editá-lo marca a paleta como não salva.
+  const handleMeshColorModeChange = (m: MeshColorMode) => {
+    setEdited(true);
+    setMeshColorMode(m);
+  };
+  const handleMeshLineColorChange = (c: string) => {
+    setEdited(true);
+    setMeshLineColor(c);
   };
 
   // Índices ativos (não deletados) em ordem VISUAL: [º0…º4 ativos, Borda, Fundo].
@@ -357,6 +432,7 @@ export default function App() {
     next[i] = v;
     for (let j = i + 1; j < next.length; j++) if (next[j] < v) next[j] = v; // empurra externos ↑
     for (let j = i - 1; j >= 0; j--) if (next[j] > v) next[j] = v;          // empurra internos ↓
+    setEdited(true); // tamanho do anel faz parte do estilo
     next.forEach((val, idx) => { if (val !== ringWeights[idx]) ringSetters[idx](val); });
   };
   const handleRing0Weight = (v: number) => setRingWeight(0, v);
@@ -370,9 +446,12 @@ export default function App() {
     setSeed(Math.floor(Math.random() * 2 ** 31));
   };
 
-  // Range de tamanho: min nunca passa do max e vice-versa.
-  const handleBlobSizeMin = (v: number) => setBlobSizeMin(Math.min(v, blobSizeMax));
-  const handleBlobSizeMax = (v: number) => setBlobSizeMax(Math.max(v, blobSizeMin));
+  // Wrapper: marca o Estilo como não salvo (params de forma fazem parte dele).
+  const markEd = (fn: (v: number) => void) => (v: number) => { setEdited(true); fn(v); };
+
+  // Range de tamanho: min nunca passa do max e vice-versa (e marca edição).
+  const handleBlobSizeMin = (v: number) => { setEdited(true); setBlobSizeMin(Math.min(v, blobSizeMax)); };
+  const handleBlobSizeMax = (v: number) => { setEdited(true); setBlobSizeMax(Math.max(v, blobSizeMin)); };
 
   const handleDownload = () => {
     setExportError(null);
@@ -439,7 +518,13 @@ export default function App() {
   // Salva as edições NA paleta ativa, pra sempre: preset embutido → override em
   // localStorage; paleta salvada → atualiza a entrada in-place.
   const handleSavePalette = () => {
-    const st: PaletteOverride = { colors: [...customColors] as PaletteColors, deletedColors: [...deletedColors] };
+    const st: PaletteOverride = {
+      colors: [...customColors] as PaletteColors,
+      deletedColors: [...deletedColors],
+      meshColorMode,
+      meshLineColor,
+      style: currentStyle(),
+    };
     if (builtinOf(paletteId)) {
       setPaletteOverrides((prev) => {
         const next = { ...prev, [paletteId]: st };
@@ -449,7 +534,9 @@ export default function App() {
     } else {
       setSavedPalettes((prev) => {
         const next = prev.map((p) =>
-          p.id === paletteId ? { ...p, colors: st.colors, deletedColors: st.deletedColors } : p,
+          p.id === paletteId
+            ? { ...p, colors: st.colors, deletedColors: st.deletedColors, meshColorMode, meshLineColor, style: st.style }
+            : p,
         );
         persistSavedPalettes(next);
         return next;
@@ -469,7 +556,7 @@ export default function App() {
   // Deletar: paleta salvada → remove; preset embutido → oculta (deletedPresets)
   // e remove o override. Se era a ativa, seleciona a próxima disponível.
   const handleDeletePalette = (id: string) => {
-    if (!window.confirm(`Deletar a paleta "${nameOf(id)}"?`)) return;
+    if (!window.confirm(`Deletar o estilo "${nameOf(id)}"?`)) return;
     if (builtinOf(id)) {
       setDeletedPresets((prev) => {
         const next = prev.includes(id) ? prev : [...prev, id];
@@ -501,6 +588,9 @@ export default function App() {
       name: `${nameOf(paletteId)} cópia`,
       colors: [...customColors] as PaletteColors,
       ...(deletedColors.length ? { deletedColors: [...deletedColors] } : {}),
+      meshColorMode,
+      meshLineColor,
+      style: currentStyle(),
     };
     setSavedPalettes((prev) => {
       const next = [...prev, entry];
@@ -514,14 +604,24 @@ export default function App() {
   // Renomear a paleta ativa: preset embutido → grava o nome no override (mantendo
   // as cores salvas atuais); paleta salvada → atualiza o nome in-place.
   const handleRenamePalette = () => {
-    const name = window.prompt('Novo nome da paleta:', nameOf(paletteId));
+    const name = window.prompt('Novo nome do estilo:', nameOf(paletteId));
     if (name === null) return;
     const clean = name.trim();
     if (!clean) return;
     if (builtinOf(paletteId)) {
       const st = savedStateOf(paletteId);
       setPaletteOverrides((prev) => {
-        const next = { ...prev, [paletteId]: { colors: st.colors, deletedColors: st.deletedColors, name: clean } };
+        const next = {
+          ...prev,
+          [paletteId]: {
+            colors: st.colors,
+            deletedColors: st.deletedColors,
+            meshColorMode: st.meshColorMode,
+            meshLineColor: st.meshLineColor,
+            style: st.style,
+            name: clean,
+          },
+        };
         persistOverrides(next);
         return next;
       });
@@ -532,6 +632,27 @@ export default function App() {
         return next;
       });
     }
+  };
+
+  // Restaurar padrão de fábrica: apaga o override do preset embutido ativo e
+  // recarrega os defaults embutidos. Só faz sentido se houver override.
+  const canResetPreset = !!builtinOf(paletteId) && !!paletteOverrides[paletteId];
+  const handleResetPreset = () => {
+    const b = builtinOf(paletteId);
+    if (!b || !paletteOverrides[paletteId]) return;
+    if (!window.confirm(`Restaurar "${nameOf(paletteId)}" ao padrão de fábrica? Isso apaga as edições salvas deste estilo.`)) return;
+    setPaletteOverrides((prev) => {
+      const next = { ...prev };
+      delete next[paletteId];
+      persistOverrides(next);
+      return next;
+    });
+    setCustomColors(paletteColors(b));
+    setDeletedColors(b.deletedColors ?? []);
+    setMeshColorMode(MESH_MODE_DEFAULT);
+    setMeshLineColor(MESH_LINE_DEFAULT);
+    applyStyle(b.style ?? STYLE_DEFAULT);
+    setEdited(false);
   };
 
   // Cores ativas (o rascunho atual) — usado no export do projeto.
@@ -734,14 +855,16 @@ export default function App() {
     onDeletePalette: handleDeletePalette,
     onDuplicatePalette: handleDuplicatePalette,
     onRenamePalette: handleRenamePalette,
+    canResetPreset,
+    onResetPreset: handleResetPreset,
     onModeChange: setMode,
-    onBlobCountChange: setBlobCount,
-    onIrregularityChange: setIrregularity,
-    onWarpChange: setWarp,
-    onWarpScaleChange: setWarpScale,
+    onBlobCountChange: markEd(setBlobCount),
+    onIrregularityChange: markEd(setIrregularity),
+    onWarpChange: markEd(setWarp),
+    onWarpScaleChange: markEd(setWarpScale),
     onBlobSizeMinChange: handleBlobSizeMin,
     onBlobSizeMaxChange: handleBlobSizeMax,
-    onBlobSizeVarChange: setBlobSizeVar,
+    onBlobSizeVarChange: markEd(setBlobSizeVar),
     onAssetBandsChange: setAssetBands,
     onAssetWarpChange: setAssetWarp,
     onAssetCoreChange: setAssetCore,
@@ -762,20 +885,20 @@ export default function App() {
     onMeshLevelsChange: setMeshLevels,
     onMeshLineWidthChange: setMeshLineWidth,
     onMeshReliefChange: setMeshRelief,
-    onMeshLineColorChange: setMeshLineColor,
-    onMeshColorModeChange: setMeshColorMode,
+    onMeshLineColorChange: handleMeshLineColorChange,
+    onMeshColorModeChange: handleMeshColorModeChange,
     onRing0WeightChange: handleRing0Weight,
-    onRing0FluidezChange: setRing0Fluidez,
+    onRing0FluidezChange: markEd(setRing0Fluidez),
     onRing1WeightChange: handleRing1Weight,
-    onRing1FluidezChange: setRing1Fluidez,
+    onRing1FluidezChange: markEd(setRing1Fluidez),
     onRing2WeightChange: handleRing2Weight,
-    onRing2FluidezChange: setRing2Fluidez,
+    onRing2FluidezChange: markEd(setRing2Fluidez),
     onRing3WeightChange: handleRing3Weight,
-    onRing3FluidezChange: setRing3Fluidez,
+    onRing3FluidezChange: markEd(setRing3Fluidez),
     onRing4WeightChange: handleRing4Weight,
-    onRing4FluidezChange: setRing4Fluidez,
+    onRing4FluidezChange: markEd(setRing4Fluidez),
     onBordaWeightChange: handleBordaWeight,
-    onBordaFluidezChange: setBordaFluidez,
+    onBordaFluidezChange: markEd(setBordaFluidez),
     onRandomize: handleRandomize,
     onDownload: handleDownload,
   };

@@ -104,6 +104,8 @@ export type ControlsProps = {
   onDeletePalette: (id: string) => void;
   onDuplicatePalette: () => void;
   onRenamePalette: () => void;
+  canResetPreset: boolean;
+  onResetPreset: () => void;
   onModeChange: (m: RenderMode) => void;
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
@@ -283,14 +285,7 @@ export function ImagemPanel(props: ControlsProps) {
                   <Param label="Densidade de linhas" min={4} max={80} step={1} value={props.meshLevels} onChange={props.onMeshLevelsChange} />
                   <Param label="Espessura" min={0.4} max={3} step={0.1} value={props.meshLineWidth} onChange={props.onMeshLineWidthChange} />
                   <Param label="Relevo extra" min={0} max={1.5} step={0.01} value={props.meshRelief} onChange={props.onMeshReliefChange} />
-                  <div className="subnote">COR DA LINHA</div>
-                  <div className="seg" style={{ marginBottom: 10 }}>
-                    <button className={props.meshColorMode === 'solid' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('solid')}>Sólida</button>
-                    <button className={props.meshColorMode === 'palette' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('palette')}>Seguir paleta</button>
-                  </div>
-                  {props.meshColorMode === 'solid' && (
-                    <ColorRow label="Cor" color={props.meshLineColor} onChange={props.onMeshLineColorChange} />
-                  )}
+                  <div className="subnote" style={{ opacity: 0.7 }}>COR DA LINHA → PALETA ↓</div>
                 </>
               )}
             </>
@@ -563,9 +558,16 @@ export function ColorRingsDock(props: ControlsProps) {
       {/* ANÉIS */}
       <div className="dock-sub dock-rings">
         <div className="dock-head">
-          <span className="dh-ttl">Anéis</span>
-          <span className="dh-meta">{`${activeInnerCount} + BORDA + FUNDO · COR / TAMANHO / FLUIDEZ`}</span>
-          {props.deletedColors.length > 0 && (
+          <span className="dh-ttl">{props.mode === 'mesh' ? 'Cores · Mesh' : 'Anéis'}</span>
+          {props.mode === 'mesh' ? (
+            <div className="seg dh-seg">
+              <button className={props.meshColorMode === 'solid' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('solid')}>Linha sólida</button>
+              <button className={props.meshColorMode === 'palette' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('palette')}>Seguir paleta</button>
+            </div>
+          ) : (
+            <span className="dh-meta">{`${activeInnerCount} + BORDA + FUNDO · COR / TAMANHO / DIFUSÃO`}</span>
+          )}
+          {props.deletedColors.length > 0 && !(props.mode === 'mesh' && props.meshColorMode === 'solid') && (
             <button className="btn hd-btn" onClick={props.onRestoreColor} title="Restaura o último anel deletado">
               <span className="ic">＋</span> Anel
             </button>
@@ -573,24 +575,48 @@ export function ColorRingsDock(props: ControlsProps) {
         </div>
         <div className="dock-body">
           <div className="ringdock">
-            {props.mode === 'heatmap'
-              ? visibleRings.map((r) => (
-                  <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
-                    {ringHead(r)}
-                    <div className="rc-body">
-                      <MiniParam label="TAMANHO" unit="rel" value={r.weight} onChange={r.onWeight} />
-                      <MiniParam label="FLUIDEZ" unit="v" value={r.fluidez} onChange={r.onFluidez} />
-                    </div>
+            {props.mode === 'mesh' && props.meshColorMode === 'solid' ? (
+              /* Mesh linha sólida: só a cor da linha + Fundo (anéis não afetam). */
+              <div className="ringcol">
+                <div className="rc-head"><span className="rid">Linha</span></div>
+                <div className="rc-body">
+                  <div className="rc-na fundo">
+                    <ColorSwatch
+                      className="swc"
+                      isCustom={isCustom}
+                      color={props.meshLineColor}
+                      onChange={props.onMeshLineColorChange}
+                    />
+                    <HexRgbInput
+                      isCustom={isCustom}
+                      color={props.meshLineColor}
+                      onChange={props.onMeshLineColorChange}
+                    />
+                    <span>COR DA LINHA</span>
                   </div>
-                ))
-              : visibleRings.map((r) => (
-                  <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
-                    {ringHead(r)}
-                    <div className="rc-body">
-                      <div className="rc-na">— MESH MODE —</div>
-                    </div>
+                </div>
+              </div>
+            ) : props.mode === 'heatmap' ? (
+              visibleRings.map((r) => (
+                <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
+                  {ringHead(r)}
+                  <div className="rc-body">
+                    <MiniParam label="TAMANHO" unit="rel" value={r.weight} onChange={r.onWeight} />
+                    <MiniParam label="DIFUSÃO" unit="v" value={r.fluidez} onChange={r.onFluidez} />
                   </div>
-                ))}
+                </div>
+              ))
+            ) : (
+              /* Mesh seguir paleta: os anéis SÃO o gradiente das linhas. */
+              visibleRings.map((r) => (
+                <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
+                  {ringHead(r)}
+                  <div className="rc-body">
+                    <div className="rc-na">— SEGUE A PALETA —</div>
+                  </div>
+                </div>
+              ))
+            )}
 
             {/* FUNDO card — color only (colorIdx 0) */}
             <div className={colCls(0)} {...dropProps(0)}>
@@ -622,7 +648,7 @@ export function ColorRingsDock(props: ControlsProps) {
       {/* PALETA / CORES */}
       <div className="dock-sub dock-pal">
         <div className="dock-head">
-          <span className="dh-ttl">Paleta / Cores</span>
+          <span className="dh-ttl">Estilos</span>
           <span className="dh-meta">{props.edited ? 'NÃO SALVO' : ''}</span>
           <span className="hd-actions">
             {props.edited && (
@@ -630,14 +656,17 @@ export function ColorRingsDock(props: ControlsProps) {
                 <button className="btn hd-btn" onClick={props.onRevertPalette} title="Descartar edições (volta ao último salvo)">
                   <span className="ic">↩</span> Reverter
                 </button>
-                <button className="btn hd-btn" onClick={props.onSavePalette} title="Salvar as edições nesta paleta (permanente)">
+                <button className="btn hd-btn" onClick={props.onSavePalette} title="Salvar as edições neste estilo (permanente)">
                   <span className="ic">💾</span> Salvar
                 </button>
               </>
             )}
-            <button className="btn hd-btn hd-ic" onClick={props.onDuplicatePalette} title="Duplicar esta paleta">⧉</button>
-            <button className="btn hd-btn hd-ic" onClick={props.onRenamePalette} title="Renomear esta paleta">✎</button>
-            <button className="btn hd-btn hd-ic" onClick={() => props.onDeletePalette(props.paletteId)} title="Deletar esta paleta">🗑</button>
+            <button className="btn hd-btn hd-ic" onClick={props.onDuplicatePalette} title="Duplicar este estilo">⧉</button>
+            <button className="btn hd-btn hd-ic" onClick={props.onRenamePalette} title="Renomear este estilo">✎</button>
+            {props.canResetPreset && (
+              <button className="btn hd-btn hd-ic" onClick={props.onResetPreset} title="Restaurar padrão de fábrica (apaga edições salvas deste preset)">⟲</button>
+            )}
+            <button className="btn hd-btn hd-ic" onClick={() => props.onDeletePalette(props.paletteId)} title="Deletar este estilo">🗑</button>
           </span>
         </div>
         <div className="dock-body">
@@ -783,21 +812,6 @@ function HexRgbInput(props: { isCustom: boolean; color: string; onChange: (c: st
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
-      />
-    </div>
-  );
-}
-
-function ColorRow(props: { label: string; color: string; onChange: (c: string) => void }) {
-  return (
-    <div className="field-row" style={{ marginTop: 4 }}>
-      <span className="lbl">{props.label}</span>
-      <span className="hex" style={{ flex: 1 }}>{props.color}</span>
-      <input
-        type="color"
-        className="swatch-input"
-        value={props.color}
-        onChange={(e) => props.onChange(e.target.value)}
       />
     </div>
   );

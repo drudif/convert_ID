@@ -26,13 +26,22 @@ export function morphOffset(
   if (amp <= 0) return [ox, oy];
   const phase = (ox + 1) * 3.1 + (oy + 1) * 5.3 + phaseSeed;
   const w = amp * gain;
-  const t = time * freq;
-  let sx = Math.sin(t + phase);
-  let cy = Math.cos(t + phase * 1.27);
-  if (richness > 0) {
-    const t2 = time * freq * 2.7;
-    sx = (1 - 0.45 * richness) * sx + 0.45 * richness * Math.sin(t2 + phase * 1.9);
-    cy = (1 - 0.45 * richness) * cy + 0.45 * richness * Math.cos(t2 + phase * 2.3);
-  }
-  return [ox + w * sx, oy + w * cy];
+  // Wobble value at a given time. Subtracting its value at t=0 makes the morph
+  // displacement EXACTLY zero at t=0, so the still (PNG/paused frame) sits at the
+  // base composition — identical regardless of `amp`. That keeps the heat map and
+  // mesh in register at rest (per-mode morph only diverges WHILE animating).
+  const wob = (tt: number): [number, number] => {
+    const t = tt * freq;
+    let sx = Math.sin(t + phase);
+    let cy = Math.cos(t + phase * 1.27);
+    if (richness > 0) {
+      const t2 = tt * freq * 2.7;
+      sx = (1 - 0.45 * richness) * sx + 0.45 * richness * Math.sin(t2 + phase * 1.9);
+      cy = (1 - 0.45 * richness) * cy + 0.45 * richness * Math.cos(t2 + phase * 2.3);
+    }
+    return [sx, cy];
+  };
+  const [sx, cy] = wob(time);
+  const [sx0, cy0] = wob(0);
+  return [ox + w * (sx - sx0), oy + w * (cy - cy0)];
 }

@@ -269,7 +269,22 @@ export const PALETTES: Palette[] = [
   grad('cv-lirio',  'Lírio',  '#2a1c71', ['#ededea', '#89d6bc', '#2e2bc6', '#ea33a0', '#2a1c71', '#2a1c71']),
   grad('cv-brasa',  'Brasa',  '#04141a', ['#eee959', '#f39e2a', '#f39e2a', '#ea33a0', '#2a1c71', '#04141a']),
   grad('cv-abismo', 'Abismo', '#04141a', ['#89d6bc', '#2e2bc6', '#2a1c71', '#ea33a0', '#f39e2a', '#04141a']),
-  grad('cv-gelo',   'Gelo',   '#ededea', ['#ededea', '#89d6bc', '#2e2bc6', '#2e2bc6', '#2a1c71', '#04141a']),
+  // VERUS — estilo com forma própria: cores + º2/º3 deletados + parâmetros padrão.
+  {
+    ...grad('cv-gelo', 'VERUS', '#04141a', ['#ededea', '#89d6bc', '#2e2bc6', '#2e2bc6', '#32524e', '#04141a']),
+    deletedColors: [3, 4],
+    style: {
+      ringWeights: [0.04, 0.15, 0.18, 0.21, 0.24, 0.85],
+      ringFluidez: [0.25, 0.25, 0.25, 0.25, 0.51, 0.25],
+      blobCount: 3,
+      blobSizeMin: 0.12,
+      blobSizeMax: 0.28,
+      blobSizeVar: 1,
+      warp: 0.55,
+      irregularity: 0.95,
+      warpScale: 0.73,
+    },
+  },
   grad('cv-neon',   'Néon',   '#2a1c71', ['#ea33a0', '#f39e2a', '#eee959', '#89d6bc', '#2e2bc6', '#2a1c71']),
   grad('cv-vinho',  'Vinho',  '#04141a', ['#ea33a0', '#ea33a0', '#2a1c71', '#2e2bc6', '#89d6bc', '#04141a']),
   grad('cv-ocaso',  'Ocaso',  '#ededea', ['#eee959', '#f39e2a', '#ea33a0', '#2a1c71', '#2e2bc6', '#89d6bc']),

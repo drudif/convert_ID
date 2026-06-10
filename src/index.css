@@ -252,6 +252,9 @@ button{ font-family:inherit; }
 .seg button.on{ background:var(--accent);color:var(--accent-dk);font-weight:700; }
 .seg button:disabled{ cursor:default; }
 .seg.disabled{ opacity:.4; }
+/* compact seg inside the dock head (mesh line-colour toggle) */
+.dock-head .dh-seg{ flex:none; }
+.dock-head .dh-seg button{ flex:none;padding:6px 12px; }
 .field-row{ display:flex;gap:10px;align-items:center; }
 .field-row .lbl{ font-size:9px;color:var(--ink-3);letter-spacing:.14em;min-width:78px; }
 
