@@ -44,7 +44,7 @@ export type Composition = {
   blobs: CompositionBlob[];
 };
 
-export type RenderMode = 'heatmap' | 'mesh';
+export type RenderMode = 'heatmap' | 'mesh' | 'asset';
 export type MeshColorMode = 'solid' | 'palette';
 
 export type RenderParams = {
@@ -54,7 +54,9 @@ export type RenderParams = {
   composition: Composition;
   mode: RenderMode;       // 'heatmap' = filled blobs; 'mesh' = topographic contours
   grain: number;          // 0–1
-  irregularity: number;   // 0–1; mini-cluster spread amplitude
+  irregularity: number;   // mini-cluster spread amplitude (particle separation)
+  warp: number;           // domain-warp amplitude (smooth silhouette deformation)
+  warpScale: number;      // 0–1; size/length of the warp deformations
   // Animation. `time` advances while playing (seconds); the amounts below are
   // static. morphAmp drives the organic shape morph (both modes); meshFlow
   // scrolls the contour levels (mesh only). 0 = no motion.
@@ -97,4 +99,15 @@ export type RenderParams = {
   ring4Fluidez: number;
   bordaWeight: number;
   bordaFluidez: number;
+  // Anéis internos deletados (índices em customColors: 1=º0 … 5=º4). A presença
+  // desses anéis é forçada a 0 no heatmap, então o vizinho externo preenche o
+  // espaço sem deixar franja. Borda(6)/Fundo(0) nunca entram aqui.
+  deletedRings: number[];
+  // ASSET mode — toolset próprio (só herda a paleta). Ordem das cores: centro =
+  // º0 → borda externa. assetPresence (6, centro→borda) = quanto cada cor ocupa
+  // no raio. assetBands = nº de bandas concêntricas. assetWarp = distorção.
+  assetBands: number;
+  assetWarp: number;
+  assetCore: number; // tamanho da banda pura central (multiplicador vs banda normal)
+  assetPresence: number[];
 };

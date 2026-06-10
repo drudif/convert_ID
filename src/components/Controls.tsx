@@ -1,3 +1,4 @@
+import { useEffect, useState, type DragEvent } from 'react';
 import type { MeshColorMode, Palette, RenderMode } from '../types';
 import { PALETTES } from '../data/palettes';
 import type { SavedPalette } from '../data/savedPalettes';
@@ -34,9 +35,21 @@ export type ControlsProps = {
   paletteId: string;
   customColors: [string, string, string, string, string, string, string];
   savedPalettes: SavedPalette[];
+  paletteOverrides: Record<string, { colors: [string, string, string, string, string, string, string]; name?: string }>;
+  deletedPresets: string[];
+  edited: boolean;
   mode: RenderMode;
   blobCount: number;
   irregularity: number;
+  warp: number;
+  warpScale: number;
+  blobSizeMin: number;
+  blobSizeMax: number;
+  blobSizeVar: number;
+  assetBands: number;
+  assetWarp: number;
+  assetCore: number;
+  assetPresence: number[];
   grain: number;
   seed: number;
   playing: boolean;
@@ -44,6 +57,8 @@ export type ControlsProps = {
   videoProgress: { done: number; total: number } | null;
   videoQuality: '1080' | '4k';
   onVideoQualityChange: (q: '1080' | '4k') => void;
+  videoFps: 60 | 24 | 18 | 12;
+  onVideoFpsChange: (f: 60 | 24 | 18 | 12) => void;
   onExportVideo: () => void;
   onExportPreview: () => void;
   onCancelExport: () => void;
@@ -78,11 +93,29 @@ export type ControlsProps = {
   onHeightChange: (h: number) => void;
   onPaletteChange: (id: string) => void;
   onCustomColorChange: (idx: number, color: string) => void;
+  // Reordena cores por inserção. `from`/`to` são índices em customColors
+  // (0=Fundo, 1..5=º0…º4, 6=Borda) — a posição real do card arrastado.
+  onReorderColors: (from: number, to: number) => void;
+  deletedColors: number[]; // índices (1..5) dos anéis internos deletados
+  onDeleteColor: (colorIdx: number) => void;
+  onRestoreColor: () => void;
   onSavePalette: () => void;
+  onRevertPalette: () => void;
   onDeletePalette: (id: string) => void;
+  onDuplicatePalette: () => void;
+  onRenamePalette: () => void;
   onModeChange: (m: RenderMode) => void;
   onBlobCountChange: (n: number) => void;
   onIrregularityChange: (i: number) => void;
+  onWarpChange: (v: number) => void;
+  onWarpScaleChange: (v: number) => void;
+  onBlobSizeMinChange: (v: number) => void;
+  onBlobSizeMaxChange: (v: number) => void;
+  onBlobSizeVarChange: (v: number) => void;
+  onAssetBandsChange: (v: number) => void;
+  onAssetWarpChange: (v: number) => void;
+  onAssetCoreChange: (v: number) => void;
+  onAssetPresenceChange: (i: number, v: number) => void;
   onGrainChange: (g: number) => void;
   onPlayingChange: (p: boolean) => void;
   onSpeedChange: (s: number) => void;
@@ -117,23 +150,10 @@ export type ControlsProps = {
   onDownload: () => void;
 };
 
-function ringColorsFor(
-  paletteId: string,
-  customColors: string[],
-  savedPalettes: SavedPalette[],
-): { fundo: string; rings: string[] } {
-  if (paletteId === 'custom') {
-    // customColors = [Fundo, º0, º1, º2, º3, º4, Borda]
-    return { fundo: customColors[0], rings: customColors.slice(1) };
-  }
-  const saved = savedPalettes.find((p) => p.id === paletteId);
-  if (saved) return { fundo: saved.colors[0], rings: saved.colors.slice(1) };
-  const palette = PALETTES.find((p) => p.id === paletteId);
-  if (!palette) return { fundo: customColors[0], rings: customColors.slice(1) };
-  const bg = palette.background;
-  const stops = palette.blobVariants[0].stops;
-  const rings = stops.map((s) => (s.alpha < 0.05 ? bg : s.color));
-  return { fundo: bg, rings };
+// O dock sempre mostra o RASCUNHO da paleta ativa (customColors = [Fundo, º0…º4,
+// Borda]) — toda paleta é editável diretamente.
+function ringColorsFor(customColors: string[]): { fundo: string; rings: string[] } {
+  return { fundo: customColors[0], rings: customColors.slice(1) };
 }
 
 // ============================================================
@@ -173,6 +193,12 @@ export function ImagemPanel(props: ControlsProps) {
             >
               Mesh
             </button>
+            <button
+              className={props.mode === 'asset' ? 'on' : ''}
+              onClick={() => props.onModeChange('asset')}
+            >
+              Asset
+            </button>
           </div>
         </div>
       </section>
@@ -205,29 +231,67 @@ export function ImagemPanel(props: ControlsProps) {
         </div>
       </section>
 
-      {/* CAMPO */}
+      {/* CAMPO / ASSET */}
       <section className="group">
-        <div className="sec-head"><span className="idx">A3</span><span className="ttl">/ CAMPO</span><span className="meta">BLOB FIELD</span></div>
+        {props.mode === 'asset' ? (
+          <div className="sec-head"><span className="idx">A3</span><span className="ttl">/ ASSET</span><span className="meta">SHAPE BUILDER</span></div>
+        ) : (
+          <div className="sec-head"><span className="idx">A3</span><span className="ttl">/ CAMPO</span><span className="meta">BLOB FIELD</span></div>
+        )}
         <div className="group-body">
-          <Param label="Nº de blobs" min={1} max={8} step={1} value={props.blobCount} onChange={props.onBlobCountChange} />
-          <button className="btn" style={{ margin: '6px 0 10px' }} onClick={props.onRandomize}>
-            <span className="ic">↻</span> Randomize
-          </button>
-          <Param label="Irregularidade" min={0} max={1} step={0.01} value={props.irregularity} onChange={props.onIrregularityChange} />
-          <Param label="Grão" min={0} max={1} step={0.01} value={props.grain} onChange={props.onGrainChange} />
-
-          {props.mode === 'mesh' && (
+          {props.mode === 'asset' ? (
             <>
-              <Param label="Densidade de linhas" min={4} max={80} step={1} value={props.meshLevels} onChange={props.onMeshLevelsChange} />
-              <Param label="Espessura" min={0.4} max={3} step={0.1} value={props.meshLineWidth} onChange={props.onMeshLineWidthChange} />
-              <Param label="Relevo extra" min={0} max={1.5} step={0.01} value={props.meshRelief} onChange={props.onMeshReliefChange} />
-              <div className="subnote">COR DA LINHA</div>
-              <div className="seg" style={{ marginBottom: 10 }}>
-                <button className={props.meshColorMode === 'solid' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('solid')}>Sólida</button>
-                <button className={props.meshColorMode === 'palette' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('palette')}>Seguir paleta</button>
-              </div>
-              {props.meshColorMode === 'solid' && (
-                <ColorRow label="Cor" color={props.meshLineColor} onChange={props.onMeshLineColorChange} />
+              <Param label="Bandas" min={6} max={60} step={1} value={props.assetBands} onChange={props.onAssetBandsChange} />
+              <Param label="Tamanho do núcleo" min={1} max={20} step={0.5} value={props.assetCore} onChange={props.onAssetCoreChange} />
+              <Param label="Distorção" min={0} max={1} step={0.01} value={props.assetWarp} onChange={props.onAssetWarpChange} />
+              <button className="btn" style={{ margin: '6px 0 10px' }} onClick={props.onRandomize}>
+                <span className="ic">↻</span> Randomize
+              </button>
+              <div className="subnote">PRESENÇA DAS CORES · CENTRO → BORDA</div>
+              {['º0', 'º1', 'º2', 'º3', 'º4', 'Borda'].map((lbl, i) => {
+                // Anéis internos (i 0..4 → customColors 1..5) deletados somem daqui.
+                if (i <= 4 && props.deletedColors.includes(i + 1)) return null;
+                return (
+                  <Param
+                    key={lbl}
+                    label={lbl}
+                    min={0}
+                    max={3}
+                    step={0.05}
+                    value={props.assetPresence[i] ?? 1}
+                    onChange={(v) => props.onAssetPresenceChange(i, v)}
+                  />
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <Param label="Nº de blobs" min={1} max={8} step={1} value={props.blobCount} onChange={props.onBlobCountChange} />
+              <Param label="Tamanho mín" min={0.04} max={0.5} step={0.01} value={props.blobSizeMin} onChange={props.onBlobSizeMinChange} />
+              <Param label="Tamanho máx" min={0.04} max={0.5} step={0.01} value={props.blobSizeMax} onChange={props.onBlobSizeMaxChange} />
+              <Param label="Variação do tamanho" min={0} max={1} step={0.01} value={props.blobSizeVar} onChange={props.onBlobSizeVarChange} />
+              <button className="btn" style={{ margin: '6px 0 10px' }} onClick={props.onRandomize}>
+                <span className="ic">↻</span> Randomize
+              </button>
+              <Param label="Irregularidade" min={0} max={3} step={0.01} value={props.irregularity} onChange={props.onIrregularityChange} />
+              <Param label="Warp" min={0} max={3} step={0.01} value={props.warp} onChange={props.onWarpChange} />
+              <Param label="Tamanho do warp" min={0} max={1} step={0.01} value={props.warpScale} onChange={props.onWarpScaleChange} />
+              <Param label="Grão" min={0} max={1} step={0.01} value={props.grain} onChange={props.onGrainChange} />
+
+              {props.mode === 'mesh' && (
+                <>
+                  <Param label="Densidade de linhas" min={4} max={80} step={1} value={props.meshLevels} onChange={props.onMeshLevelsChange} />
+                  <Param label="Espessura" min={0.4} max={3} step={0.1} value={props.meshLineWidth} onChange={props.onMeshLineWidthChange} />
+                  <Param label="Relevo extra" min={0} max={1.5} step={0.01} value={props.meshRelief} onChange={props.onMeshReliefChange} />
+                  <div className="subnote">COR DA LINHA</div>
+                  <div className="seg" style={{ marginBottom: 10 }}>
+                    <button className={props.meshColorMode === 'solid' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('solid')}>Sólida</button>
+                    <button className={props.meshColorMode === 'palette' ? 'on' : ''} onClick={() => props.onMeshColorModeChange('palette')}>Seguir paleta</button>
+                  </div>
+                  {props.meshColorMode === 'solid' && (
+                    <ColorRow label="Cor" color={props.meshLineColor} onChange={props.onMeshLineColorChange} />
+                  )}
+                </>
               )}
             </>
           )}
@@ -344,6 +408,21 @@ export function VideoPanel(props: ControlsProps) {
               </button>
             </div>
           </div>
+          <div className="field-row" style={{ marginBottom: 10 }}>
+            <span className="lbl">FPS</span>
+            <div className="seg" style={{ flex: 1 }}>
+              {([60, 24, 18, 12] as const).map((f) => (
+                <button
+                  key={f}
+                  className={props.videoFps === f ? 'on' : ''}
+                  disabled={props.videoProgress !== null}
+                  onClick={() => props.onVideoFpsChange(f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
           {props.videoProgress !== null ? (
             <div className="btn-grid c2">
               <button className="btn exporting" disabled>
@@ -379,8 +458,18 @@ export function VideoPanel(props: ControlsProps) {
 // BOTTOM — RINGS + PALETTE dock
 // ============================================================
 export function ColorRingsDock(props: ControlsProps) {
-  const isCustom = props.paletteId === 'custom';
-  const colors = ringColorsFor(props.paletteId, props.customColors, props.savedPalettes);
+  const isCustom = true; // toda paleta é editável diretamente (não há mais "Custom")
+  const colors = ringColorsFor(props.customColors);
+
+  // Cor do chip: reflete a edição ao vivo (se for a ativa e editada), senão o
+  // override salvo, senão o gradiente padrão do preset/paleta.
+  const chipBg = (id: string, fallback: Palette | SavedPalette): React.CSSProperties => {
+    let cols: string[] | undefined;
+    if (props.paletteId === id && props.edited) cols = props.customColors;
+    else if (props.paletteOverrides[id]) cols = props.paletteOverrides[id].colors;
+    if (cols) return { background: `linear-gradient(90deg, ${cols[1]}, ${cols[3]}, ${cols[5]})` };
+    return 'colors' in fallback ? savedSwStyle(fallback) : swStyle(fallback);
+  };
 
   const rings: Array<{
     id: string;
@@ -399,7 +488,75 @@ export function ColorRingsDock(props: ControlsProps) {
     { id: 'Borda', color: colors.rings[5], colorIdx: 6, weight: props.bordaWeight, fluidez: props.bordaFluidez, onWeight: props.onBordaWeightChange, onFluidez: props.onBordaFluidezChange },
   ];
 
-  const savedCount = props.savedPalettes.length;
+  // Anéis internos ativos (não deletados) + Borda sempre. Fundo é card à parte.
+  const visibleRings = rings.filter((r) => !props.deletedColors.includes(r.colorIdx));
+  const activeInnerCount = 5 - props.deletedColors.length; // º0…º4 não deletados
+  const canDelete = activeInnerCount > 2;
+
+  // Drag-and-drop p/ reordenar as cores. A chave é o índice em customColors
+  // (0=Fundo, 1..5=º0…º4, 6=Borda) — robusto a anéis escondidos por deleção.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const dragProps = (idx: number) => ({
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      setDragIdx(idx);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx)); // Firefox exige payload
+    },
+    onDragEnd: () => {
+      setDragIdx(null);
+      setOverIdx(null);
+    },
+  });
+
+  const dropProps = (idx: number) => ({
+    onDragOver: (e: DragEvent) => {
+      if (dragIdx === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (overIdx !== idx) setOverIdx(idx);
+    },
+    onDragLeave: () => setOverIdx((s) => (s === idx ? null : s)),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      if (dragIdx !== null && dragIdx !== idx) props.onReorderColors(dragIdx, idx);
+      setDragIdx(null);
+      setOverIdx(null);
+    },
+  });
+
+  const colCls = (idx: number) =>
+    'ringcol' +
+    (dragIdx === idx ? ' dragging' : '') +
+    (overIdx === idx && dragIdx !== idx ? ' drop-over' : '');
+
+  // Head do card: rótulo + (deletar, p/ internos) + swatch arrastável + console.
+  const ringHead = (r: { id: string; color: string; colorIdx: number }) => (
+    <>
+      <div className="rc-head">
+        <span className="rid">{r.id}</span>
+        <div className="rc-head-r">
+          {r.colorIdx >= 1 && r.colorIdx <= 5 && canDelete && (
+            <button className="ring-del" title="Deletar esta cor" onClick={() => props.onDeleteColor(r.colorIdx)}>×</button>
+          )}
+          <ColorSwatch
+            className="swc"
+            isCustom={isCustom}
+            color={r.color}
+            onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
+            {...dragProps(r.colorIdx)}
+          />
+        </div>
+      </div>
+      <HexRgbInput
+        isCustom={isCustom}
+        color={r.color}
+        onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
+      />
+    </>
+  );
 
   return (
     <section className="dock">
@@ -407,54 +564,47 @@ export function ColorRingsDock(props: ControlsProps) {
       <div className="dock-sub dock-rings">
         <div className="dock-head">
           <span className="dh-ttl">Anéis</span>
-          <span className="dh-meta">6 LAYERS + FUNDO · COR / TAMANHO / FLUIDEZ</span>
+          <span className="dh-meta">{`${activeInnerCount} + BORDA + FUNDO · COR / TAMANHO / FLUIDEZ`}</span>
+          {props.deletedColors.length > 0 && (
+            <button className="btn hd-btn" onClick={props.onRestoreColor} title="Restaura o último anel deletado">
+              <span className="ic">＋</span> Anel
+            </button>
+          )}
         </div>
         <div className="dock-body">
           <div className="ringdock">
-            {props.mode === 'heatmap' ? (
-              rings.map((r) => (
-                <div className="ringcol" key={r.id}>
-                  <div className="rc-head">
-                    <span className="rid">{r.id}</span>
-                    <ColorSwatch
-                      className="swc"
-                      isCustom={isCustom}
-                      color={r.color}
-                      onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
-                    />
+            {props.mode === 'heatmap'
+              ? visibleRings.map((r) => (
+                  <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
+                    {ringHead(r)}
+                    <div className="rc-body">
+                      <MiniParam label="TAMANHO" unit="rel" value={r.weight} onChange={r.onWeight} />
+                      <MiniParam label="FLUIDEZ" unit="v" value={r.fluidez} onChange={r.onFluidez} />
+                    </div>
                   </div>
-                  <div className="rc-body">
-                    <MiniParam label="TAMANHO" unit="rel" value={r.weight} onChange={r.onWeight} />
-                    <MiniParam label="FLUIDEZ" unit="v" value={r.fluidez} onChange={r.onFluidez} />
+                ))
+              : visibleRings.map((r) => (
+                  <div className={colCls(r.colorIdx)} key={r.id} {...dropProps(r.colorIdx)}>
+                    {ringHead(r)}
+                    <div className="rc-body">
+                      <div className="rc-na">— MESH MODE —</div>
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              rings.map((r) => (
-                <div className="ringcol" key={r.id}>
-                  <div className="rc-head">
-                    <span className="rid">{r.id}</span>
-                    <ColorSwatch
-                      className="swc"
-                      isCustom={isCustom}
-                      color={r.color}
-                      onChange={(c) => props.onCustomColorChange(r.colorIdx, c)}
-                    />
-                  </div>
-                  <div className="rc-body">
-                    <div className="rc-na">— MESH MODE —</div>
-                  </div>
-                </div>
-              ))
-            )}
+                ))}
 
-            {/* FUNDO card — color only */}
-            <div className="ringcol">
+            {/* FUNDO card — color only (colorIdx 0) */}
+            <div className={colCls(0)} {...dropProps(0)}>
               <div className="rc-head"><span className="rid">Fundo</span></div>
               <div className="rc-body">
                 <div className="rc-na fundo">
                   <ColorSwatch
                     className="swc"
+                    isCustom={isCustom}
+                    color={colors.fundo}
+                    onChange={(c) => props.onCustomColorChange(0, c)}
+                    {...dragProps(0)}
+                  />
+                  <HexRgbInput
                     isCustom={isCustom}
                     color={colors.fundo}
                     onChange={(c) => props.onCustomColorChange(0, c)}
@@ -473,38 +623,43 @@ export function ColorRingsDock(props: ControlsProps) {
       <div className="dock-sub dock-pal">
         <div className="dock-head">
           <span className="dh-ttl">Paleta / Cores</span>
-          <span className="dh-meta">{`${PALETTES.length} PRESETS · CUSTOM · ${savedCount} SAVED`}</span>
-          {isCustom && (
-            <button className="btn hd-btn" onClick={props.onSavePalette}>
-              <span className="ic">💾</span> Salvar paleta
-            </button>
-          )}
+          <span className="dh-meta">{props.edited ? 'NÃO SALVO' : ''}</span>
+          <span className="hd-actions">
+            {props.edited && (
+              <>
+                <button className="btn hd-btn" onClick={props.onRevertPalette} title="Descartar edições (volta ao último salvo)">
+                  <span className="ic">↩</span> Reverter
+                </button>
+                <button className="btn hd-btn" onClick={props.onSavePalette} title="Salvar as edições nesta paleta (permanente)">
+                  <span className="ic">💾</span> Salvar
+                </button>
+              </>
+            )}
+            <button className="btn hd-btn hd-ic" onClick={props.onDuplicatePalette} title="Duplicar esta paleta">⧉</button>
+            <button className="btn hd-btn hd-ic" onClick={props.onRenamePalette} title="Renomear esta paleta">✎</button>
+            <button className="btn hd-btn hd-ic" onClick={() => props.onDeletePalette(props.paletteId)} title="Deletar esta paleta">🗑</button>
+          </span>
         </div>
         <div className="dock-body">
           <div className="chips">
-            {PALETTES.map((p: Palette) => (
-              <button
-                key={p.id}
-                className={'chip' + (props.paletteId === p.id ? ' on' : '')}
-                onClick={() => props.onPaletteChange(p.id)}
-              >
-                <span className="sw" style={swStyle(p)} />
-                {p.name}
-              </button>
-            ))}
-            <button
-              key="custom"
-              className={'chip custom' + (isCustom ? ' on' : '')}
-              onClick={() => props.onPaletteChange('custom')}
-            >
-              <span className="sw" style={{ background: 'repeating-linear-gradient(45deg,#9F75FF 0 4px,#161618 4px 8px)' }} />
-              Custom
-            </button>
+            {PALETTES.filter((p) => !props.deletedPresets.includes(p.id)).map((p: Palette) => {
+              const active = props.paletteId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  className={'chip' + (active ? ' on' : '')}
+                  onClick={() => props.onPaletteChange(p.id)}
+                >
+                  <span className="sw" style={chipBg(p.id, p)} />
+                  {props.paletteOverrides[p.id]?.name ?? p.name}
+                </button>
+              );
+            })}
             {props.savedPalettes.map((sp) => {
               const active = props.paletteId === sp.id;
               return (
                 <span key={sp.id} className={'chip saved' + (active ? ' on' : '')}>
-                  <span className="sw" style={savedSwStyle(sp)} />
+                  <span className="sw" style={chipBg(sp.id, sp)} />
                   <button className="chip-name" onClick={() => props.onPaletteChange(sp.id)}>{sp.name}</button>
                   <button className="del" title="Apagar paleta" onClick={() => props.onDeletePalette(sp.id)}>×</button>
                 </span>
@@ -535,18 +690,102 @@ function ColorSwatch(props: {
   isCustom: boolean;
   color: string;
   onChange: (c: string) => void;
+  draggable?: boolean;
+  onDragStart?: (e: DragEvent) => void;
+  onDragEnd?: (e: DragEvent) => void;
 }) {
+  const drag = {
+    draggable: props.draggable,
+    onDragStart: props.onDragStart,
+    onDragEnd: props.onDragEnd,
+  };
+  const dragCls = props.draggable ? ' draggable' : '';
   if (props.isCustom) {
     return (
       <input
         type="color"
-        className={props.className + ' swatch-input'}
+        className={props.className + ' swatch-input' + dragCls}
         value={props.color}
+        title="Clique para a roda de cores · arraste para reordenar"
         onChange={(e) => props.onChange(e.target.value)}
+        {...drag}
       />
     );
   }
-  return <span className={props.className + ' static'} style={{ background: props.color }} aria-hidden />;
+  return (
+    <span
+      className={props.className + ' static' + dragCls}
+      style={{ background: props.color }}
+      title="Arraste para reordenar"
+      {...drag}
+    />
+  );
+}
+
+// Aceita HEX (#ff2ead, ff2ead, #f2a) ou RGB (rgb(255,46,173), 255,46,173,
+// 255 46 173) e devolve sempre #rrggbb minúsculo; null se inválido.
+function parseColorInput(raw: string): string | null {
+  const s = raw.trim().toLowerCase();
+  let m = s.match(/^#?([0-9a-f]{6})$/);
+  if (m) return '#' + m[1];
+  m = s.match(/^#?([0-9a-f]{3})$/);
+  if (m) {
+    const h = m[1];
+    return '#' + h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  }
+  m = s.match(/^(?:rgb\s*\(\s*)?(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*\)?$/);
+  if (m) {
+    const r = +m[1], g = +m[2], b = +m[3];
+    if (r <= 255 && g <= 255 && b <= 255) {
+      const hx = (n: number) => n.toString(16).padStart(2, '0');
+      return '#' + hx(r) + hx(g) + hx(b);
+    }
+  }
+  return null;
+}
+
+// Console de texto por cor: digita HEX ou RGB direto. Edição só em modo Custom;
+// fora dele mostra o valor atual (somente leitura), espelhando o swatch estático.
+function HexRgbInput(props: { isCustom: boolean; color: string; onChange: (c: string) => void }) {
+  const [text, setText] = useState(props.color);
+  // Re-sincroniza quando a cor muda por fora (roda de cores, misturar, troca de paleta).
+  useEffect(() => setText(props.color), [props.color]);
+
+  if (!props.isCustom) {
+    return (
+      <div className="cc-row">
+        <span className="cc-static">{parseColorInput(props.color) ?? props.color}</span>
+      </div>
+    );
+  }
+
+  const commit = () => {
+    const parsed = parseColorInput(text);
+    if (parsed) {
+      props.onChange(parsed);
+      setText(parsed);
+    } else {
+      setText(props.color); // inválido → reverte
+    }
+  };
+
+  return (
+    <div className="cc-row">
+      <input
+        type="text"
+        className="cc-text"
+        value={text}
+        spellCheck={false}
+        autoComplete="off"
+        title="Digite HEX (#ff2ead) ou RGB (255,46,173)"
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+      />
+    </div>
+  );
 }
 
 function ColorRow(props: { label: string; color: string; onChange: (c: string) => void }) {

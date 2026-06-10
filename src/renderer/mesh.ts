@@ -1,10 +1,12 @@
 import { drawContours } from './contour';
 import { applyGrain } from './grain';
+import { makeWarp } from './warp';
 import { morphOffset } from './animate';
 import type { RenderParams } from '../types';
 
 // Field-source constants mirror the heatmap renderer so the mesh relief tracks
-// exactly the same blob "relief" the heatmap proposes.
+// exactly the same blob "relief" the heatmap proposes. Mini spread = irregularidade;
+// the coordinate warp = warp. Both shared with render.ts → modes stay in register.
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);
 const MINI_OFFSET_SCALE = 0.65;
@@ -41,7 +43,7 @@ function sampleRamp(colors: string[], pos: number): string {
 
 export function renderMesh(target: HTMLCanvasElement, params: RenderParams): void {
   const {
-    width, height, palette, composition, irregularity, grain,
+    width, height, palette, composition, irregularity, warp: warpAmt, warpScale, grain,
     time, morphAmp, meshFlow, meshFlowDir,
     meshLevels, meshLineWidth, meshRelief, meshLineColor, meshColorMode,
   } = params;
@@ -53,9 +55,12 @@ export function renderMesh(target: HTMLCanvasElement, params: RenderParams): voi
   ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Pre-compute blob field sources (identical maths to the heatmap).
+  // 2. Pre-compute blob field sources (single smooth source each — identical
+  //    maths to the heatmap) plus the SHARED domain warp, so the contours land
+  //    on exactly the same iso-surfaces as the heatmap rings.
   const minDim = Math.min(width, height);
   const offsetScale = MINI_OFFSET_SCALE * irregularity;
+  const warp = makeWarp(composition.seed, warpAmt, warpScale, time, minDim);
   const blobs = composition.blobs.map((b) => {
     const r = b.radius * minDim;
     const miniR = r * MINI_R_SCALE;
@@ -70,7 +75,7 @@ export function renderMesh(target: HTMLCanvasElement, params: RenderParams): voi
   });
   const nBlobs = blobs.length;
 
-  // 3. Sample the blob field on a regular grid.
+  // 3. Sample the blob field on a regular grid, at WARPED coordinates.
   const cell = Math.max(1, CELL_PX);
   const cols = Math.floor(width / cell) + 1;
   const rows = Math.floor(height / cell) + 1;
@@ -81,14 +86,17 @@ export function renderMesh(target: HTMLCanvasElement, params: RenderParams): voi
     const py = j * cell;
     for (let i = 0; i < cols; i++) {
       const px = i * cell;
+      const [wx, wy] = warp(px, py);
+      const sx = px + wx;
+      const sy = py + wy;
       let f = 0;
       for (let b = 0; b < nBlobs; b++) {
         const blob = blobs[b];
-        const miniRSq = blob.miniRSq;
         const minis = blob.minis;
+        const miniRSq = blob.miniRSq;
         for (let m = 0; m < minis.length; m++) {
-          const dx = px - minis[m].cx;
-          const dy = py - minis[m].cy;
+          const dx = sx - minis[m].cx;
+          const dy = sy - minis[m].cy;
           f += miniRSq / (dx * dx + dy * dy + miniRSq);
         }
       }

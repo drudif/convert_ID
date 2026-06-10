@@ -1,29 +1,27 @@
 import { applyGrain } from './grain';
 import { renderMesh } from './mesh';
+import { renderAsset } from './asset';
+import { makeWarp } from './warp';
 import { morphOffset } from './animate';
 import { mulberry32 } from '../lib/prng';
 import type { GradientStop, RenderParams } from '../types';
 
-// A field source: a cluster of "minis" plus its less-spread core copy and an
-// envelope (1 for the permanent composition blobs; 0..1 for transient spawns).
+// A field source: a cluster of "minis" (their spread = the IRREGULARIDADE / particle
+// separation) plus an envelope (1 for permanent composition blobs; 0..1 for transient
+// flow/spawns). On top of this, a shared domain WARP (see ./warp) displaces the sample
+// coordinate, deforming the silhouette smoothly. The two effects are independent and
+// combine. No more "core" copy — every ring samples the same field, so the heatmap and
+// mesh stay in register.
 type Source = {
   miniRSq: number;
   minis: { cx: number; cy: number }[];
-  coreMinis: { cx: number; cy: number }[];
   env: number;
 };
 
 const MINI_COUNT = 8;
 const MINI_R_SCALE = 1 / Math.sqrt(MINI_COUNT);   // 8 stacked minis with this radius
                                                   // produce the same field as 1 primary R
-const MINI_OFFSET_SCALE = 0.65;                   // mini cluster spread at irregularity=1
-
-// º0 (the hot core) renders from a LESS-spread copy of the mini cluster, so its
-// field peak stays high as irregularity rises — the core keeps its irregular
-// distortion but no longer dilutes (fades/fragments) or grows. The other rings
-// still use the fully-spread field. 0 = core ignores irregularity (round core);
-// 1 = core spreads like everything else (the old, diluting behaviour).
-const RING0_SPREAD = 0.45;
+const MINI_OFFSET_SCALE = 0.65;                   // mini cluster spread at irregularidade=1
 
 // Field threshold range. The Lorentzian field per mini peaks at 1; with 8
 // minis per blob and multi-blob compositions, totalField reaches ~5–8 at
@@ -106,18 +104,14 @@ function buildFlowSources(
     const miniR = r * MINI_R_SCALE;
     const miniRSq = miniR * miniR;
     const minis: { cx: number; cy: number }[] = [];
-    const coreMinis: { cx: number; cy: number }[] = [];
     for (let m = 0; m < MINI_COUNT; m++) {
       const [mox, moy] = morphOffset(
         rng() * 2 - 1, rng() * 2 - 1, time, morphAmp,
         FLOW_MORPH_FREQ, FLOW_MORPH_GAIN, blobPhase, 1,
       );
-      const ox = mox * r * offsetScale;
-      const oy = moy * r * offsetScale;
-      minis.push({ cx: cx + ox, cy: cy + oy });
-      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+      minis.push({ cx: cx + mox * r * offsetScale, cy: cy + moy * r * offsetScale });
     }
-    out.push({ miniRSq, minis, coreMinis, env });
+    out.push({ miniRSq, minis, env });
   }
   return out;
 }
@@ -150,15 +144,11 @@ function buildSpawnSources(
     const miniR = r * MINI_R_SCALE;
     const miniRSq = miniR * miniR;
     const minis: { cx: number; cy: number }[] = [];
-    const coreMinis: { cx: number; cy: number }[] = [];
     for (let m = 0; m < MINI_COUNT; m++) {
       const [mox, moy] = morphOffset(rng() * 2 - 1, rng() * 2 - 1, time, morphAmp);
-      const ox = mox * r * offsetScale;
-      const oy = moy * r * offsetScale;
-      minis.push({ cx: cx + ox, cy: cy + oy });
-      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+      minis.push({ cx: cx + mox * r * offsetScale, cy: cy + moy * r * offsetScale });
     }
-    out.push({ miniRSq, minis, coreMinis, env });
+    out.push({ miniRSq, minis, env });
   }
   return out;
 }
@@ -190,9 +180,13 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     renderMesh(target, params);
     return;
   }
+  if (params.mode === 'asset') {
+    renderAsset(target, params);
+    return;
+  }
   const {
     width, height, palette, composition,
-    grain, irregularity, time, morphAmp,
+    grain, irregularity, warp: warpAmt, warpScale, time, morphAmp,
     drift, flowDensity, flowSize,
     spawnRate, spawnLife, spawnSize, spawnSizeVar,
     ring0Weight, ring0Fluidez,
@@ -201,7 +195,15 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     ring3Weight, ring3Fluidez,
     ring4Weight, ring4Fluidez,
     bordaWeight, bordaFluidez,
+    deletedRings,
   } = params;
+  // Deleted inner rings (colorIdx 1..5 → ring0..ring4): their presence is forced
+  // to 0 so the outer neighbour fills the gap with no fringe/"ghost".
+  const d0 = deletedRings.includes(1);
+  const d1 = deletedRings.includes(2);
+  const d2 = deletedRings.includes(3);
+  const d3 = deletedRings.includes(4);
+  const d4 = deletedRings.includes(5);
   target.width = width;
   target.height = height;
   const targetCtx = target.getContext('2d')!;
@@ -225,11 +227,15 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   //    measure the actual peak field of this composition).
   const minDim = Math.min(width, height);
   const offsetScale = MINI_OFFSET_SCALE * irregularity;
+  // Shared domain warp on the sample coordinate (amplitude = warpAmt, size =
+  // warpScale, evolution speed = morphAmp). Identical to the mesh's warp, so the
+  // two modes register exactly. Works ON TOP OF the per-blob mini spread.
+  const warp = makeWarp(composition.seed, warpAmt, warpScale, time, minDim);
   // Base layer = the designed composition (the PNG). At time 0 it sits exactly
   // at its designed positions, so the animation STARTS FROM THE PNG. When the
   // correnteza (drift) is on, each composition blob then drifts along its own
-  // heading (+ meander) and leaves the frame — handed off to the flow stream
-  // and surgimento, which start empty at t=0 and fade in to sustain the scene.
+  // heading and leaves the frame — handed off to the flow stream and surgimento,
+  // which start empty at t=0 and fade in to sustain the scene.
   const flowSpeed = drift * FLOW_SPEED * minDim;
   const base: Source[] = composition.blobs.map((b, i) => {
     const r = b.radius * minDim;
@@ -237,9 +243,6 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
     const miniRSq = miniR * miniR;
     let cx = b.x * width;
     let cy = b.y * height;
-    // Straight per-blob drift (no meander) so the offset is exactly 0 at time 0
-    // — the base composition stays pixel-identical to the Mesh field at t=0, and
-    // both modes use the SAME base morph, so Heat map and Mesh stay in register.
     if (drift > 0) {
       const rng = mulberry32((Math.imul(composition.seed | 0, 0x9e3779b1) ^ Math.imul(i + 1, 0x85ebca6b)) >>> 0);
       const ang = rng() * TWO_PI;
@@ -247,15 +250,11 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       cy += Math.sin(ang) * flowSpeed * time;
     }
     const minis: { cx: number; cy: number }[] = [];
-    const coreMinis: { cx: number; cy: number }[] = [];
     for (const m of b.harmonics.minis) {
       const [mox, moy] = morphOffset(m.ox, m.oy, time, morphAmp);
-      const ox = mox * r * offsetScale;
-      const oy = moy * r * offsetScale;
-      minis.push({ cx: cx + ox, cy: cy + oy });
-      coreMinis.push({ cx: cx + ox * RING0_SPREAD, cy: cy + oy * RING0_SPREAD });
+      minis.push({ cx: cx + mox * r * offsetScale, cy: cy + moy * r * offsetScale });
     }
-    return { miniRSq, minis, coreMinis, env: 1 };
+    return { miniRSq, minis, env: 1 };
   });
   // Stream (sustains the flow as the composition drifts off) + in-place
   // surgimento. Both start empty at t=0 (births ≥ 0) so frame 0 is purely the PNG.
@@ -266,6 +265,27 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
       width, height, minDim, offsetScale, morphAmp));
   const nSources = sources.length;
 
+  // Metaball field (sum over each source's mini cluster) sampled at a WARPED
+  // coordinate. The mini spread = irregularidade; the coordinate warp = warp.
+  const fieldAt = (x: number, y: number): number => {
+    const [wx, wy] = warp(x, y);
+    const sx = x + wx;
+    const sy = y + wy;
+    let f = 0;
+    for (let i = 0; i < nSources; i++) {
+      const b = sources[i];
+      const miniRSq = b.miniRSq;
+      const env = b.env;
+      const minis = b.minis;
+      for (let m = 0; m < minis.length; m++) {
+        const dx = sx - minis[m].cx;
+        const dy = sy - minis[m].cy;
+        f += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
+      }
+    }
+    return f;
+  };
+
   // 4. Estimate the peak field on a coarse grid. The metaball field maxes out
   //    around blob/cluster cores, but its exact peak depends on blob count,
   //    radius and irregularity. A fixed threshold ceiling (e.g. 12 for ring 0)
@@ -273,42 +293,23 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
   //    sizes instead of shrinking to a tiny visible core. Clamping each
   //    threshold to a fraction of the measured peak keeps every ring present.
   let fieldMax = 0;
-  let coreFieldMax = 0;
   const sampleStep = Math.max(1, Math.floor(minDim / 96));
   for (let y = 0; y < height; y += sampleStep) {
     for (let x = 0; x < width; x += sampleStep) {
-      let f = 0;
-      let cf = 0;
-      for (let i = 0; i < nSources; i++) {
-        const b = sources[i];
-        const miniRSq = b.miniRSq;
-        const env = b.env;
-        for (let m = 0; m < b.minis.length; m++) {
-          const mini = b.minis[m];
-          const dx = x - mini.cx;
-          const dy = y - mini.cy;
-          f += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
-          const cm = b.coreMinis[m];
-          const cdx = x - cm.cx;
-          const cdy = y - cm.cy;
-          cf += env * (miniRSq / (cdx * cdx + cdy * cdy + miniRSq));
-        }
-      }
+      const f = fieldAt(x, y);
       if (f > fieldMax) fieldMax = f;
-      if (cf > coreFieldMax) coreFieldMax = cf;
     }
   }
   // Coarse sampling slightly undershoots the true peak, so VISIBLE_FRACTION
   // can sit close to 1 and still guarantee a few real pixels clear the
   // threshold — a minimal but always-present core at size 0.
   const thrCeil = fieldMax * 0.95;
-  const coreThrCeil = coreFieldMax * 0.95;
 
   // 5. Per-ring field thresholds (size → outer threshold of that ring).
   //    Higher size = lower threshold = bigger spatial coverage. Rings 0 and 1
   //    use a steeper mapping so they can shrink to near-invisible at slider=0.
   //    Each is capped at thrCeil so it can never exceed the achievable field.
-  const thr0 = Math.min(sizeToThreshold(eff0, FIELD_THR_MAX_R0), coreThrCeil);
+  const thr0 = Math.min(sizeToThreshold(eff0, FIELD_THR_MAX_R0), thrCeil);
   const thr1 = Math.min(sizeToThreshold(eff1, FIELD_THR_MAX_R1), thrCeil);
   const thr2 = Math.min(sizeToThreshold(eff2), thrCeil);
   const thr3 = Math.min(sizeToThreshold(eff3), thrCeil);
@@ -350,43 +351,19 @@ export function render(target: HTMLCanvasElement, params: RenderParams): void {
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      let totalField = 0;
-      for (let i = 0; i < nSources; i++) {
-        const b = sources[i];
-        const miniRSq = b.miniRSq;
-        const env = b.env;
-        for (let m = 0; m < b.minis.length; m++) {
-          const mini = b.minis[m];
-          const dx = x - mini.cx;
-          const dy = y - mini.cy;
-          totalField += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
-        }
-      }
+      // Same warped single-source field that the mesh samples — so every ring,
+      // º0 included, lands on exactly the same iso-contours as the mesh.
+      const totalField = fieldAt(x, y);
 
       // Borda presence is the silhouette alpha (outermost ring).
       const bB = smoothstep(thrB - bandB, thrB + bandB, totalField);
       if (bB <= 0) continue;
 
-      const b4 = smoothstep(thr4 - band4, thr4 + band4, totalField);
-      const b3 = smoothstep(thr3 - band3, thr3 + band3, totalField);
-      const b2 = smoothstep(thr2 - band2, thr2 + band2, totalField);
-      const b1 = smoothstep(thr1 - band1, thr1 + band1, totalField);
-
-      // º0 uses the less-spread core field so it stays compact and bright as
-      // irregularity rises, instead of diluting with the fully-spread field.
-      let coreField = 0;
-      for (let i = 0; i < nSources; i++) {
-        const b = sources[i];
-        const miniRSq = b.miniRSq;
-        const env = b.env;
-        for (let m = 0; m < b.coreMinis.length; m++) {
-          const cm = b.coreMinis[m];
-          const dx = x - cm.cx;
-          const dy = y - cm.cy;
-          coreField += env * (miniRSq / (dx * dx + dy * dy + miniRSq));
-        }
-      }
-      const b0 = smoothstep(thr0 - band0, thr0 + band0, coreField);
+      const b4 = d4 ? 0 : smoothstep(thr4 - band4, thr4 + band4, totalField);
+      const b3 = d3 ? 0 : smoothstep(thr3 - band3, thr3 + band3, totalField);
+      const b2 = d2 ? 0 : smoothstep(thr2 - band2, thr2 + band2, totalField);
+      const b1 = d1 ? 0 : smoothstep(thr1 - band1, thr1 + band1, totalField);
+      const b0 = d0 ? 0 : smoothstep(thr0 - band0, thr0 + band0, totalField);
 
       // Layered blend: bg → Borda → º4 → º3 → º2 → º1 → º0 (innermost on top)
       let r = bg.r * (1 - bB) + cB.r * bB;
