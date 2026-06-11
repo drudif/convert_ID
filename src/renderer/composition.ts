@@ -37,6 +37,9 @@ export function generateComposition(
   // free = aleatório total no canvas inteiro (ignora a âncora), como antes do
   // recurso de posição.
   free: boolean = false,
+  // bordas = blobs nascem nas BORDAS (centro fora da área visível) e vazam só um
+  // pouco pra dentro do canvas. Ignora a âncora/free.
+  bordas: boolean = false,
 ): Composition {
   const rng = mulberry32(seed);
   const weights =
@@ -60,7 +63,17 @@ export function generateComposition(
     const baseR = mid + (rng() * 2 - 1) * half;
     let cx: number;
     let cy: number;
-    if (free) {
+    if (bordas) {
+      // Centro numa das 4 bordas, empurrado pra FORA pelo raio (0.5–1.1 r) → só
+      // uma fração do blob (e seu campo suave) vaza pra dentro do canvas.
+      const along = rng();
+      const out = baseR * (0.5 + rng() * 0.6);
+      const edge = Math.floor(rng() * 4);
+      if (edge === 0) { cx = along; cy = -out; }          // topo
+      else if (edge === 1) { cx = 1 + out; cy = along; }  // direita
+      else if (edge === 2) { cx = along; cy = 1 + out; }  // base
+      else { cx = -out; cy = along; }                     // esquerda
+    } else if (free) {
       cx = rng();
       cy = rng();
     } else {

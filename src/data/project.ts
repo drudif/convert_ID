@@ -28,6 +28,7 @@ export type ProjectState = {
   blobAnchorX: number;
   blobAnchorY: number;
   blobFree: boolean;
+  blobBordas: boolean;
   assetBands: number;
   assetWarp: number;
   assetCore: number;
@@ -108,6 +109,7 @@ export function parseProject(text: string): Partial<ProjectState> {
   }
 
   if (typeof d.blobFree === 'boolean') out.blobFree = d.blobFree;
+  if (typeof d.blobBordas === 'boolean') out.blobBordas = d.blobBordas;
   if (d.mode === 'heatmap' || d.mode === 'mesh' || d.mode === 'asset') out.mode = d.mode;
   if (d.meshColorMode === 'solid' || d.meshColorMode === 'palette') out.meshColorMode = d.meshColorMode;
   if (d.meshFlowDir === 1 || d.meshFlowDir === -1) out.meshFlowDir = d.meshFlowDir;

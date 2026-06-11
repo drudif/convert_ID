@@ -60,6 +60,8 @@ export default function App() {
   const [blobAnchorX, setBlobAnchorX] = useState(0.5);
   const [blobAnchorY, setBlobAnchorY] = useState(0.5);
   const [blobFree, setBlobFree] = useState(false);
+  // bordas = blobs nas bordas (centro fora do canvas), vazando levemente pra dentro.
+  const [blobBordas, setBlobBordas] = useState(false);
   // ASSET mode — toolset próprio. Presença centro→borda (º0…º4, Borda); º0 começa
   // ~20% do raio. Bandas: 10% menos que a 1ª geração (36 → 32). Distorção reduzida.
   const [assetBands, setAssetBands] = useState(25);
@@ -266,8 +268,8 @@ export default function App() {
   }, [edited, customColors, paletteId, paletteOverrides, savedPalettes]);
 
   const composition = useMemo(
-    () => generateComposition(seed, blobCount, palette, blobSizeMin, blobSizeMax, blobSizeVar, blobAnchorX, blobAnchorY, blobFree),
-    [seed, blobCount, palette, blobSizeMin, blobSizeMax, blobSizeVar, blobAnchorX, blobAnchorY, blobFree],
+    () => generateComposition(seed, blobCount, palette, blobSizeMin, blobSizeMax, blobSizeVar, blobAnchorX, blobAnchorY, blobFree, blobBordas),
+    [seed, blobCount, palette, blobSizeMin, blobSizeMax, blobSizeVar, blobAnchorX, blobAnchorY, blobFree, blobBordas],
   );
 
   // Para um anel interno deletado (stop k, 0..4), o índice do próximo anel ATIVO
@@ -665,7 +667,7 @@ export default function App() {
       width, height, videoQuality, videoFpsHeatmap, videoFpsMesh,
       paletteId, customColors: effectiveColors(), deletedColors,
       mode, blobCount, irregularity, warp, warpScale, blobSizeMin, blobSizeMax, blobSizeVar,
-      blobAnchorX, blobAnchorY, blobFree,
+      blobAnchorX, blobAnchorY, blobFree, blobBordas,
       assetBands, assetWarp, assetCore, assetPresence, seed, grainHeatmap, grainMesh,
       speedHeatmap, speedMesh, morphAmpHeatmap, morphAmpMesh, meshFlow, meshFlowDir,
       drift, flowDensity, flowSize,
@@ -707,6 +709,7 @@ export default function App() {
     if (p.blobAnchorX !== undefined) setBlobAnchorX(p.blobAnchorX);
     if (p.blobAnchorY !== undefined) setBlobAnchorY(p.blobAnchorY);
     if (p.blobFree !== undefined) setBlobFree(p.blobFree);
+    if (p.blobBordas !== undefined) setBlobBordas(p.blobBordas);
     if (p.assetBands !== undefined) setAssetBands(p.assetBands);
     if (p.assetWarp !== undefined) setAssetWarp(p.assetWarp);
     if (p.assetCore !== undefined) setAssetCore(p.assetCore);
@@ -925,8 +928,8 @@ export default function App() {
                   [0.25, 0.5, 0.75].map((ax) => (
                     <button
                       key={`${ax}-${ay}`}
-                      className={'acell' + (!blobFree && blobAnchorX === ax && blobAnchorY === ay ? ' on' : '')}
-                      onClick={() => { setBlobFree(false); setBlobAnchorX(ax); setBlobAnchorY(ay); }}
+                      className={'acell' + (!blobFree && !blobBordas && blobAnchorX === ax && blobAnchorY === ay ? ' on' : '')}
+                      onClick={() => { setBlobFree(false); setBlobBordas(false); setBlobAnchorX(ax); setBlobAnchorY(ay); }}
                       aria-label="posição dos blobs"
                     />
                   )),
@@ -934,9 +937,14 @@ export default function App() {
               </div>
               <button
                 className={'anchor-free' + (blobFree ? ' on' : '')}
-                onClick={() => setBlobFree(true)}
+                onClick={() => { setBlobFree(true); setBlobBordas(false); }}
                 title="Aleatório total no canvas inteiro (sem posição definida)"
               >Livre</button>
+              <button
+                className={'anchor-free' + (blobBordas ? ' on' : '')}
+                onClick={() => { setBlobBordas(true); setBlobFree(false); }}
+                title="Blobs nas bordas (centro fora do canvas) vazando levemente pra dentro"
+              >Bordas</button>
             </div>
           )}
           <div className="topbar-io">
